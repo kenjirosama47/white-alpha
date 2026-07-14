@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,9 +12,13 @@ import { useAuth } from '@/contexts/auth-context';
 // Assistant Claude arrivent en phases ultérieures (voir PLAN.md).
 export default function HomeScreen() {
   const { signOut } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSignOut() {
-    signOut();
+  async function handleSignOut() {
+    if (submitting) return;
+    setSubmitting(true);
+    await signOut();
+    setSubmitting(false);
     router.replace('/');
   }
 
@@ -27,8 +32,9 @@ export default function HomeScreen() {
 
         <Pressable
           onPress={handleSignOut}
-          style={({ pressed }) => [styles.buttonSecondary, pressed && styles.pressed]}>
-          <ThemedText type="smallBold">Se déconnecter</ThemedText>
+          disabled={submitting}
+          style={({ pressed }) => [styles.buttonSecondary, (pressed || submitting) && styles.pressed]}>
+          <ThemedText type="smallBold">{submitting ? 'Déconnexion...' : 'Se déconnecter'}</ThemedText>
         </Pressable>
       </SafeAreaView>
     </ThemedView>

@@ -9,17 +9,36 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 
+const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+
 export default function RegisterScreen() {
   const theme = useTheme();
-  const { signIn } = useAuth();
+  const { signUp } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // TEMPORAIRE (Phase 1) — aucune création de compte réelle, aucun appel réseau.
-  // Sera remplacé en Phase 2 par une inscription Supabase.
-  function handleSubmit() {
-    signIn();
+  async function handleSubmit() {
+    if (submitting) return;
+    setError(null);
+
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!USERNAME_PATTERN.test(normalizedUsername)) {
+      setError(
+        "Le nom d'utilisateur doit contenir entre 3 et 24 caractères : lettres minuscules, chiffres ou underscore uniquement.",
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    const { error: signUpError } = await signUp(email.trim(), password, normalizedUsername);
+    setSubmitting(false);
+    if (signUpError) {
+      setError(signUpError);
+      return;
+    }
     router.replace('/');
   }
 
@@ -35,6 +54,7 @@ export default function RegisterScreen() {
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
+            editable={!submitting}
             style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
           />
           <TextInput
@@ -44,6 +64,7 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            editable={!submitting}
             style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
           />
           <TextInput
@@ -52,14 +73,25 @@ export default function RegisterScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            editable={!submitting}
             style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
           />
 
+          {error && (
+            <ThemedText type="small" style={styles.error}>
+              {error}
+            </ThemedText>
+          )}
+
           <Pressable
             onPress={handleSubmit}
-            style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.buttonPrimary,
+              (pressed || submitting) && styles.pressed,
+            ]}>
             <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-              Créer mon compte
+              {submitting ? 'Création...' : 'Créer mon compte'}
             </ThemedText>
           </Pressable>
         </ThemedView>
@@ -98,6 +130,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     fontSize: 16,
+  },
+  error: {
+    color: '#D14343',
   },
   buttonPrimary: {
     backgroundColor: '#208AEF',

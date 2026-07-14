@@ -14,11 +14,19 @@ export default function LoginScreen() {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // TEMPORAIRE (Phase 1) — aucune vérification réelle, aucun appel réseau.
-  // Sera remplacé en Phase 2 par une authentification Supabase.
-  function handleSubmit() {
-    signIn();
+  async function handleSubmit() {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
+    const { error: signInError } = await signIn(email.trim(), password);
+    setSubmitting(false);
+    if (signInError) {
+      setError(signInError);
+      return;
+    }
     router.replace('/');
   }
 
@@ -35,6 +43,7 @@ export default function LoginScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            editable={!submitting}
             style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
           />
           <TextInput
@@ -43,14 +52,25 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            editable={!submitting}
             style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
           />
 
+          {error && (
+            <ThemedText type="small" style={styles.error}>
+              {error}
+            </ThemedText>
+          )}
+
           <Pressable
             onPress={handleSubmit}
-            style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.buttonPrimary,
+              (pressed || submitting) && styles.pressed,
+            ]}>
             <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-              Se connecter
+              {submitting ? 'Connexion...' : 'Se connecter'}
             </ThemedText>
           </Pressable>
         </ThemedView>
@@ -89,6 +109,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,
     fontSize: 16,
+  },
+  error: {
+    color: '#D14343',
   },
   buttonPrimary: {
     backgroundColor: '#208AEF',

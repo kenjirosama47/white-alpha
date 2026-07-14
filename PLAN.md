@@ -48,6 +48,23 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 - Remplacement des assets de démonstration Expo restants (logo/splash) par le
   branding définitif de l'application.
 
+## Décision d'architecture — Supabase & Railway
+
+- **Supabase** reste la seule plateforme backend pendant la Phase 2 et au-delà pour :
+  authentification (Supabase Auth), profils utilisateurs, base PostgreSQL, Row Level
+  Security, messages en temps réel (Supabase Realtime), et stockage futur des photos/vidéos
+  (Supabase Storage). Railway ne remplace Supabase à aucun moment.
+- **Railway** (projet existant `melodious-serenity`) est réservé à une **phase ultérieure**
+  pour un service distinct nommé **`white-alpha-api`**, qui hébergera :
+  - l'API backend sécurisée de White Alpha ;
+  - l'intégration Claude côté serveur (jamais dans l'app mobile) ;
+  - la limitation de débit (rate limiting) ;
+  - la vérification des jetons Supabase ;
+  - tout traitement qui ne doit jamais s'exécuter directement dans l'application mobile.
+- Rien n'est déployé sur Railway avant le début de cette phase ultérieure.
+- Quand cette phase démarrera, l'application mobile communiquera avec `white-alpha-api`
+  **exclusivement en HTTPS**.
+
 ## Identité visuelle finale (White Alpha)
 - Nom final affiché de l'application : « White Alpha ».
 - Identité visuelle finale basée sur un loup blanc.
