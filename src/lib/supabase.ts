@@ -17,6 +17,10 @@ if (!supabaseUrl || !supabasePublishableKey) {
 // (déjà protégé contre l'absence de `window`).
 const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
 
+// Doit correspondre au scheme natif ("scheme" dans app.json) et à une URL
+// autorisée dans Supabase Auth > URL Configuration > Redirect URLs.
+export const AUTH_CALLBACK_URL = 'whitealpha://auth/callback';
+
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     storage,

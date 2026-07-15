@@ -13,12 +13,22 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   sans aucune valeur secrète.
 - Vérifications : `tsc --noEmit`, `expo lint`, `expo-doctor`.
 
-## Phase 2 — Authentification réelle (Supabase)
+## Phase 2 — Authentification réelle (Supabase) — Terminée
 - Intégration `@supabase/supabase-js`.
 - Remplacement du contexte d'auth temporaire par une vraie session Supabase
-  (email/mot de passe, persistance de session).
-- Table `profiles` (id, username, avatar, created_at) + RLS.
-- Écran de profil utilisateur (lecture/édition).
+  (email/mot de passe, persistance de session via AsyncStorage).
+- Table `profiles` (id, username, avatar, created_at) + RLS, création automatique
+  du profil via trigger `on_auth_user_created` sur `auth.users`.
+- Deep link natif `whitealpha://auth/callback` pour la confirmation d'email
+  (scheme app.json, route `src/app/auth/callback.tsx`, écran de renvoi d'email).
+- Build Preview Android autonome (APK signé, sans dépendance à Metro/PC) validé
+  sur téléphone : inscription réelle, connexion réelle, session persistée.
+- **⚠️ Confirmation email temporairement désactivée dans Supabase Auth pour les
+  tests de développement.** À réactiver avec un fournisseur SMTP fiable (au lieu
+  du SMTP par défaut Supabase, limité en volume et peu fiable en delivrabilité)
+  avant toute publication ou usage par de vrais utilisateurs.
+- Écran de profil utilisateur (lecture/édition) : reporté à une phase ultérieure,
+  non bloquant pour la Phase 3.
 
 ## Phase 3 — Recherche & conversations
 - Recherche d'un utilisateur par pseudo.

@@ -1,0 +1,175 @@
+import { useURL } from 'expo-linking';
+import { router } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/hooks/use-theme';
+
+type Status = 'processing' | 'success' | 'error';
+
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  otp_expired: 'Ce lien de confirmation a expiré. Demande un nouvel email depuis l\'écran d\'inscription.',
+  access_denied: 'Ce lien de confirmation est invalide ou a déjà été utilisé.',
+};
+
+// Un lien Supabase peut porter ses paramètres après `?` (PKCE / erreurs) ou
+// après `#` (flux implicite avec access_token/refresh_token) : on fusionne les deux.
+function extractParams(url: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  const segments = url.split(/[?#]/).slice(1);
+  for (const segment of segments) {
+    for (const pair of segment.split('&')) {
+      if (!pair) continue;
+      const [rawKey, rawValue = ''] = pair.split('=');
+      if (!rawKey) continue;
+      try {
+        params[decodeURIComponent(rawKey)] = decodeURIComponent(rawValue.replace(/\+/g, ' '));
+      } catch {
+        // Ignore un segment mal encodé plutôt que de faire planter le parsing.
+      }
+    }
+  }
+  return params;
+}
+
+export default function AuthCallbackScreen() {
+  const theme = useTheme();
+  const url = useURL();
+  const [status, setStatus] = useState<Status>('processing');
+  const [message, setMessage] = useState<string | null>(null);
+  const handledUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!url || handledUrl.current === url) return;
+    handledUrl.current = url;
+
+    async function handle() {
+      const params = extractParams(url!);
+
+      if (params.error) {
+        setStatus('error');
+        setMessage(
+          ERROR_CODE_MESSAGES[params.error_code] ??
+            'Impossible de confirmer ce lien. Merci de réessayer.',
+        );
+        return;
+      }
+
+      try {
+        if (params.access_token && params.refresh_token) {
+          const { error } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+          if (error) throw error;
+        } else if (params.code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+          if (error) throw error;
+        } else if (params.token_hash && params.type) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: params.token_hash,
+            type: params.type as 'signup' | 'email' | 'magiclink' | 'recovery' | 'invite',
+          });
+          if (error) throw error;
+        } else {
+          setStatus('error');
+          setMessage('Ce lien de confirmation est incomplet ou invalide.');
+          return;
+        }
+
+        setStatus('success');
+        setMessage('Compte confirmé. Redirection...');
+        router.replace('/');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+        setStatus('error');
+        setMessage(
+          errorMessage.includes('expired')
+            ? "Ce lien de confirmation a expiré. Demande un nouvel email depuis l'écran d'inscription."
+            : 'Impossible de confirmer ce lien. Merci de réessayer.',
+        );
+      }
+    }
+
+    handle();
+  }, [url]);
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        {status === 'processing' && (
+          <>
+            <ActivityIndicator size="large" color={theme.text} />
+            <ThemedText type="subtitle" style={styles.text}>
+              Confirmation en cours...
+            </ThemedText>
+          </>
+        )}
+
+        {status === 'success' && (
+          <ThemedText type="subtitle" style={styles.text}>
+            {message}
+          </ThemedText>
+        )}
+
+        {status === 'error' && (
+          <>
+            <ThemedText type="subtitle" style={styles.text}>
+              Confirmation impossible
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.text}>
+              {message}
+            </ThemedText>
+            <Pressable
+              onPress={() => router.replace('/login')}
+              style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
+              <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
+                Retour à la connexion
+              </ThemedText>
+            </Pressable>
+          </>
+        )}
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  safeArea: {
+    flex: 1,
+    paddingHorizontal: Spacing.four,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.four,
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  text: {
+    textAlign: 'center',
+  },
+  buttonPrimary: {
+    backgroundColor: '#208AEF',
+    borderRadius: Spacing.three,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.five,
+    alignItems: 'center',
+    marginTop: Spacing.two,
+  },
+  buttonPrimaryLabel: {
+    color: '#ffffff',
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+});

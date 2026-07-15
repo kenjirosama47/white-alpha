@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { supabase } from '@/lib/supabase';
+import { AUTH_CALLBACK_URL, supabase } from '@/lib/supabase';
 
 type AuthResult = { error: string | null };
 
@@ -12,6 +12,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string, username: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  resendConfirmation: (email: string) => Promise<AuthResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -22,10 +23,17 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   'User already registered': 'Un compte existe déjà avec cet email.',
   'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères.',
   'Unable to validate email address: invalid format': 'Adresse email invalide.',
+  'Email link is invalid or has expired': 'Le lien de confirmation est invalide ou a expiré.',
 };
 
 function translateAuthError(message: string): string {
-  return KNOWN_ERROR_MESSAGES[message] ?? 'Une erreur est survenue. Réessaie.';
+  if (KNOWN_ERROR_MESSAGES[message]) {
+    return KNOWN_ERROR_MESSAGES[message];
+  }
+  if (/security purposes|after \d+ seconds/i.test(message)) {
+    return 'Trop de tentatives : merci de patienter quelques instants avant de réessayer.';
+  }
+  return 'Une erreur est survenue. Réessaie.';
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -58,12 +66,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { username } },
+          options: { data: { username }, emailRedirectTo: AUTH_CALLBACK_URL },
         });
         return { error: error ? translateAuthError(error.message) : null };
       },
       async signOut() {
         await supabase.auth.signOut();
+      },
+      async resendConfirmation(email) {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: { emailRedirectTo: AUTH_CALLBACK_URL },
+        });
+        return { error: error ? translateAuthError(error.message) : null };
       },
     }),
     [session, isLoading],

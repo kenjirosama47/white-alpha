@@ -23,6 +23,9 @@ function RootNavigator() {
         <Stack.Protected guard={!isAuthenticated}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
+        {/* Accessible quel que soit l'état d'authentification : le lien de
+            confirmation email peut être ouvert avant toute connexion. */}
+        <Stack.Screen name="auth/callback" />
       </Stack>
     </>
   );

@@ -1,5 +1,5 @@
-import { Link, router } from 'expo-router';
-import { useState } from 'react';
+import { Link } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,15 +10,28 @@ import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function RegisterScreen() {
   const theme = useTheme();
-  const { signUp } = useAuth();
+  const { signUp, resendConfirmation } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   async function handleSubmit() {
     if (submitting) return;
@@ -39,7 +52,59 @@ export default function RegisterScreen() {
       setError(signUpError);
       return;
     }
-    router.replace('/');
+    setRegisteredEmail(email.trim());
+  }
+
+  async function handleResend() {
+    if (resending || resendCooldown > 0 || !registeredEmail) return;
+    setResending(true);
+    setResendNotice(null);
+    const { error: resendError } = await resendConfirmation(registeredEmail);
+    setResending(false);
+    if (resendError) {
+      setResendNotice(resendError);
+      return;
+    }
+    setResendNotice('Email de confirmation renvoyé.');
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+  }
+
+  if (registeredEmail) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <ThemedText type="subtitle">Vérifie ta boîte mail</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            Un email de confirmation a été envoyé à {registeredEmail}. Clique sur le lien qu&apos;il
+            contient pour activer ton compte.
+          </ThemedText>
+
+          {resendNotice && <ThemedText type="small">{resendNotice}</ThemedText>}
+
+          <Pressable
+            onPress={handleResend}
+            disabled={resending || resendCooldown > 0}
+            style={({ pressed }) => [
+              styles.buttonPrimary,
+              (pressed || resending || resendCooldown > 0) && styles.pressed,
+            ]}>
+            <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
+              {resendCooldown > 0
+                ? `Renvoyer (${resendCooldown}s)`
+                : resending
+                  ? 'Envoi...'
+                  : "Renvoyer l'email de confirmation"}
+            </ThemedText>
+          </Pressable>
+
+          <Link href="/login" style={styles.link}>
+            <ThemedText type="link" themeColor="textSecondary">
+              Retour à la connexion
+            </ThemedText>
+          </Link>
+        </SafeAreaView>
+      </ThemedView>
+    );
   }
 
   return (
