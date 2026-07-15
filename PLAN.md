@@ -164,10 +164,24 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   (aucune persistance `urlStorage` de l'upload en cours). À traiter dans une
   phase ultérieure si nécessaire.
 - 68 tests pgTAP locaux passent (14 + 8 + 26 Phase 4A + 20 Phase 4B),
-  116 tests unitaires Jest passent.
-- **Reste à faire : test manuel de l'envoi/réception de vidéos avec deux
-  comptes réels** sur la version Preview Android autonome (nouveau build
-  requis : `expo-video` modifie la configuration native).
+  121 tests unitaires Jest passent (116 + 5 pour les deux correctifs
+  ci-dessous).
+- **Bugs trouvés et corrigés lors du test manuel Web** : (1) sur web,
+  `expo-image-picker` rapporte la durée vidéo en secondes au lieu de
+  millisecondes (bug amont de la librairie) — normalisé côté app
+  (`Platform.OS === 'web'` → conversion + arrondi entier) avant tout envoi ;
+  (2) une erreur PostgreSQL brute pouvait fuiter jusqu'à l'utilisateur au
+  lieu d'un message français — seules les exceptions volontairement levées
+  par nos RPC (`SQLSTATE P0001`) sont désormais affichées telles quelles.
+- **Test manuel Web — Réussi** : vidéo MP4 réelle envoyée depuis un compte
+  de test vers `kenjies47`, durée correctement enregistrée en base
+  (entier, ms), lecture confirmée (contrôles natifs, plein écran).
+  Compte de test et toutes ses données supprimés après validation.
+- **Reste à faire : test manuel réel sur Android** avec une vidéo choisie
+  sur le téléphone, entre deux comptes réels, sur la version Preview
+  autonome (`versionCode` 4, déjà compatible — le correctif de durée ne
+  concerne que la plateforme web, la durée native étant déjà en
+  millisecondes). Aucun nouveau build requis pour ce correctif.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.

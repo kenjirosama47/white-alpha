@@ -52,10 +52,20 @@ describe('sendMessage', () => {
     });
   });
 
-  it("remonte une erreur (ex. RLS/RPC) sous forme d'exception", async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.' } });
+  it("remonte le message d'une exception levée par la RPC elle-même (code P0001)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.', code: 'P0001' } });
 
     await expect(sendMessage('conv-1', 'Salut')).rejects.toThrow('Conversation introuvable.');
+  });
+
+  it("n'expose jamais une erreur Postgres brute (code différent de P0001) : message français générique", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid input syntax for type integer: "2.032467"', code: '22P02' },
+    });
+
+    await expect(sendMessage('conv-1', 'Salut')).rejects.toThrow("Impossible d'envoyer le message pour le moment.");
+    await expect(sendMessage('conv-1', 'Salut')).rejects.not.toThrow(/integer/);
   });
 
   it("ne passe jamais sender_id en paramètre (uniquement conversation_id et content)", async () => {
@@ -282,8 +292,8 @@ describe('sendImageMessage', () => {
     );
   });
 
-  it("remonte une erreur (ex. utilisateur non membre de la conversation) sous forme d'exception", async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.' } });
+  it("remonte le message d'une exception levée par la RPC elle-même (code P0001, ex. utilisateur non membre)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.', code: 'P0001' } });
 
     await expect(
       sendImageMessage({
@@ -293,6 +303,22 @@ describe('sendImageMessage', () => {
         sizeBytes: 12345,
       }),
     ).rejects.toThrow('Conversation introuvable.');
+  });
+
+  it("n'expose jamais une erreur Postgres brute (code différent de P0001) : message français générique", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid input syntax for type integer: "2.032467"', code: '22P02' },
+    });
+
+    await expect(
+      sendImageMessage({
+        conversationId: 'conv-1',
+        storagePath: 'conv-1/user-1/abc.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 12345,
+      }),
+    ).rejects.toThrow("Impossible d'envoyer l'image pour le moment.");
   });
 });
 
@@ -400,8 +426,8 @@ describe('sendVideoMessage', () => {
     );
   });
 
-  it("remonte une erreur (ex. utilisateur non membre de la conversation) sous forme d'exception", async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.' } });
+  it("remonte le message d'une exception levée par la RPC elle-même (code P0001, ex. utilisateur non membre)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.', code: 'P0001' } });
 
     await expect(
       sendVideoMessage({
@@ -412,6 +438,23 @@ describe('sendVideoMessage', () => {
         durationMs: 15_000,
       }),
     ).rejects.toThrow('Conversation introuvable.');
+  });
+
+  it("n'expose jamais une erreur Postgres brute (code différent de P0001) : message français générique — cas réel du bug durée non entière", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'invalid input syntax for type integer: "2.032467"', code: '22P02' },
+    });
+
+    await expect(
+      sendVideoMessage({
+        conversationId: 'conv-1',
+        storagePath: 'conv-1/user-1/clip.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 2_000_000,
+        durationMs: 15_000,
+      }),
+    ).rejects.toThrow("Impossible d'envoyer la vidéo pour le moment.");
   });
 });
 

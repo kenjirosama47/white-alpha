@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
 import * as tus from 'tus-js-client';
 
 import { supabase } from '@/lib/supabase';
@@ -34,10 +35,15 @@ jest.mock('@/lib/supabase', () => ({
 
 const mockStorageFrom = supabase.storage.from as jest.Mock;
 const mockGetSession = supabase.auth.getSession as jest.Mock;
+const originalPlatformOS = Platform.OS;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-access-token' } }, error: null });
+});
+
+afterEach(() => {
+  Platform.OS = originalPlatformOS;
 });
 
 describe('generateStoragePath', () => {
@@ -216,7 +222,8 @@ describe('pickVideoFromLibrary', () => {
     await expect(pickVideoFromLibrary()).rejects.toThrow('Format vidéo non pris en charge');
   });
 
-  it('retourne les informations de la vidéo sélectionnée, sans jamais demander la caméra', async () => {
+  it('retourne les informations de la vidéo sélectionnée (natif : duration déjà en ms), sans jamais demander la caméra', async () => {
+    Platform.OS = 'android';
     (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
       canceled: false,
@@ -235,6 +242,35 @@ describe('pickVideoFromLibrary', () => {
     });
     expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ mediaTypes: ['videos'] }));
   });
+
+  it("convertit la durée de secondes (web) en millisecondes entières (bug amont d'expo-image-picker.web.ts)", async () => {
+    Platform.OS = 'web';
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      // Sur web, expo-image-picker rapporte HTMLVideoElement.duration (secondes, flottant).
+      assets: [{ uri: 'file:///clip.mp4', mimeType: 'video/mp4', fileSize: 75_883, duration: 2.032467, width: 480, height: 360 }],
+    });
+
+    const result = await pickVideoFromLibrary();
+
+    // Sans la correction, ceci resterait 2.032467 et ferait échouer create_video_message
+    // avec une erreur Postgres brute ("invalid input syntax for type integer").
+    expect(result?.durationMs).toBe(2032);
+    expect(Number.isInteger(result?.durationMs)).toBe(true);
+  });
+
+  it('retourne durationMs null si la durée est absente ou non finie', async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///clip.mp4', mimeType: 'video/mp4', fileSize: 1000, duration: null, width: 100, height: 100 }],
+    });
+
+    const result = await pickVideoFromLibrary();
+
+    expect(result?.durationMs).toBeNull();
+  });
 });
 
 describe('recoverPendingMediaPick', () => {
@@ -249,6 +285,7 @@ describe('recoverPendingMediaPick', () => {
   });
 
   it('récupère une vidéo perdue (activité Android détruite pendant le sélecteur)', async () => {
+    Platform.OS = 'android';
     (ImagePicker.getPendingResultAsync as jest.Mock).mockResolvedValue({
       canceled: false,
       assets: [

@@ -3,6 +3,20 @@ import { validateMessageContent, type ImageMimeType, type Message, type VideoMim
 
 export const MESSAGES_PAGE_SIZE = 30;
 
+// SQLSTATE que Postgres assigne à `raise exception '...'` sans code explicite
+// (notre style dans toutes les RPC create_*_message). Ne faire confiance à
+// `error.message` que pour ce code précis : toute autre erreur (contrainte
+// violée en dehors d'un raise exception, erreur de type, panne réseau, etc.)
+// est un détail technique brut qui ne doit jamais atteindre l'utilisateur.
+const RAISE_EXCEPTION_SQLSTATE = 'P0001';
+
+function rpcErrorMessage(error: { message?: string; code?: string } | null, fallback: string): string {
+  if (error?.code === RAISE_EXCEPTION_SQLSTATE && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 const MESSAGE_SELECT =
   'id, conversation_id, sender_id, content, created_at, ' +
   'message_attachments(id, storage_path, media_type, mime_type, size_bytes, width, height, duration_ms, uploader_id, created_at)';
@@ -123,7 +137,7 @@ export async function sendMessage(conversationId: string, content: string): Prom
   });
 
   if (error) {
-    throw new Error(error.message || "Impossible d'envoyer le message pour le moment.");
+    throw new Error(rpcErrorMessage(error, "Impossible d'envoyer le message pour le moment."));
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as CreateTextMessageRow | undefined;
@@ -187,7 +201,7 @@ export async function sendImageMessage(params: CreateImageMessageParams): Promis
   });
 
   if (error) {
-    throw new Error(error.message || "Impossible d'envoyer l'image pour le moment.");
+    throw new Error(rpcErrorMessage(error, "Impossible d'envoyer l'image pour le moment."));
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as CreateImageMessageRow | undefined;
@@ -266,7 +280,7 @@ export async function sendVideoMessage(params: CreateVideoMessageParams): Promis
   });
 
   if (error) {
-    throw new Error(error.message || "Impossible d'envoyer la vidéo pour le moment.");
+    throw new Error(rpcErrorMessage(error, "Impossible d'envoyer la vidéo pour le moment."));
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as CreateVideoMessageRow | undefined;

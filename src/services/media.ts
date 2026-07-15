@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
 import * as tus from 'tus-js-client';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '@/lib/supabase';
@@ -100,6 +101,23 @@ export async function pickImageFromLibrary(): Promise<PickedImage | null> {
 }
 
 /**
+ * `expo-image-picker` rapporte `duration` en millisecondes sur natif
+ * (Android/iOS, documenté), mais en SECONDES sur web — bug amont :
+ * `ExponentImagePicker.web.ts` lit directement `HTMLVideoElement.duration`
+ * sans le convertir. Sans cette normalisation, un flottant en secondes
+ * (ex. `2.032467`) serait envoyé tel quel à `create_video_message`, dont le
+ * paramètre `p_duration_ms` est un entier côté Postgres : rejet SQL brut,
+ * jamais un message français. Normalisé une bonne fois ici, au point
+ * d'entrée : le reste de l'app peut toujours supposer des millisecondes
+ * entières.
+ */
+function normalizeDurationMs(rawDuration: number | null | undefined): number | null {
+  if (rawDuration == null || !Number.isFinite(rawDuration)) return null;
+  const ms = Platform.OS === 'web' ? rawDuration * 1000 : rawDuration;
+  return Math.round(ms);
+}
+
+/**
  * Ouvre le sélecteur de vidéos de la bibliothèque (jamais la caméra, jamais
  * le micro, une seule vidéo). Retourne `null` si l'utilisateur annule.
  * `videoMaxDuration` est un garde-fou côté sélecteur natif ; la validation
@@ -130,7 +148,7 @@ export async function pickVideoFromLibrary(): Promise<PickedVideo | null> {
     uri: asset.uri,
     mimeType: asset.mimeType,
     sizeBytes: asset.fileSize ?? null,
-    durationMs: asset.duration ?? null,
+    durationMs: normalizeDurationMs(asset.duration),
     width: asset.width ?? null,
     height: asset.height ?? null,
   };
@@ -160,7 +178,7 @@ export async function recoverPendingMediaPick(): Promise<PickedMedia | null> {
         uri: asset.uri,
         mimeType: asset.mimeType,
         sizeBytes: asset.fileSize ?? null,
-        durationMs: asset.duration ?? null,
+        durationMs: normalizeDurationMs(asset.duration),
         width: asset.width ?? null,
         height: asset.height ?? null,
       },

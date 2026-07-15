@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kenjiro.whitealpha",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "output": "static",
