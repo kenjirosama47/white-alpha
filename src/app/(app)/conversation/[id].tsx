@@ -35,12 +35,15 @@ export default function ConversationScreen() {
   const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send } =
     useMessages(id);
   const {
-    pickedImage,
-    isUploading: isSendingImage,
-    error: imageError,
-    pick: pickImage,
-    cancel: cancelImage,
-    send: sendImage,
+    pickedMedia,
+    isUploading: isUploadingMedia,
+    uploadProgress,
+    error: mediaError,
+    pickImage,
+    pickVideo,
+    cancel: cancelMedia,
+    cancelUpload,
+    send: sendMedia,
   } = useMediaUpload(id);
   const [draft, setDraft] = useState('');
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -60,10 +63,14 @@ export default function ConversationScreen() {
     }
   }
 
-  // Sélectionner/annuler une photo ne touche jamais au brouillon texte : il
-  // reste disponible pour un envoi séparé, avant ou après la photo.
-  async function handleSendImage() {
-    await sendImage();
+  // Sélectionner/annuler un média ne touche jamais au brouillon texte : il
+  // reste disponible pour un envoi séparé, avant ou après la photo/vidéo.
+  // L'envoi d'un message texte n'est jamais bloqué pendant la préparation
+  // d'un média (hooks indépendants), et une seule pièce jointe à la fois
+  // peut être en cours de préparation/upload (une seule instance de
+  // useMediaUpload par écran de conversation).
+  async function handleSendMedia() {
+    await sendMedia();
   }
 
   return (
@@ -143,18 +150,20 @@ export default function ConversationScreen() {
               {sendError}
             </ThemedText>
           )}
-          {imageError && !pickedImage && (
+          {mediaError && !pickedMedia && (
             <ThemedText type="small" style={styles.error}>
-              {imageError}
+              {mediaError}
             </ThemedText>
           )}
-          {pickedImage && (
+          {pickedMedia && (
             <AttachmentComposerPreview
-              image={pickedImage}
-              isUploading={isSendingImage}
-              error={imageError}
-              onCancel={cancelImage}
-              onSend={handleSendImage}
+              media={pickedMedia}
+              isUploading={isUploadingMedia}
+              uploadProgress={uploadProgress}
+              error={mediaError}
+              onCancel={cancelMedia}
+              onCancelUpload={cancelUpload}
+              onSend={handleSendMedia}
             />
           )}
           <ThemedView
@@ -164,19 +173,34 @@ export default function ConversationScreen() {
               // le clavier est fermé ; jamais en position absolute.
               { paddingBottom: Math.max(insets.bottom, Spacing.two) },
             ]}>
-            <Pressable
-              onPress={pickImage}
-              disabled={!!pickedImage || isSendingImage}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.photoButton,
-                { borderColor: theme.backgroundSelected },
-                (pressed || !!pickedImage || isSendingImage) && styles.pressed,
-              ]}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Photo
-              </ThemedText>
-            </Pressable>
+            <ThemedView style={styles.mediaButtons}>
+              <Pressable
+                onPress={pickImage}
+                disabled={!!pickedMedia || isUploadingMedia}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.mediaButton,
+                  { borderColor: theme.backgroundSelected },
+                  (pressed || !!pickedMedia || isUploadingMedia) && styles.pressed,
+                ]}>
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  Photo
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={pickVideo}
+                disabled={!!pickedMedia || isUploadingMedia}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.mediaButton,
+                  { borderColor: theme.backgroundSelected },
+                  (pressed || !!pickedMedia || isUploadingMedia) && styles.pressed,
+                ]}>
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  Vidéo
+                </ThemedText>
+              </Pressable>
+            </ThemedView>
             <TextInput
               placeholder="Écrire un message..."
               placeholderTextColor={theme.textSecondary}
@@ -264,7 +288,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
   },
-  photoButton: {
+  mediaButtons: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+  },
+  mediaButton: {
     borderWidth: 1,
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.two,

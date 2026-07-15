@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { deleteMessage, fetchMessageById, fetchMessages, sendImageMessage, sendMessage } from '@/services/messages';
+import { deleteMessage, fetchMessageById, fetchMessages, sendImageMessage, sendMessage, sendVideoMessage } from '@/services/messages';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 
 jest.mock('@/lib/supabase', () => ({
@@ -132,6 +132,56 @@ describe('fetchMessages', () => {
       createdAt: '2026-07-15T10:00:00Z',
     });
   });
+
+  it('mappe une pièce jointe vidéo (media_type video) avec sa durée', async () => {
+    const limit = jest.fn().mockResolvedValue({
+      data: [
+        {
+          id: 'm1',
+          conversation_id: 'conv-1',
+          sender_id: 'user-1',
+          content: '',
+          created_at: '2026-07-15T10:00:00Z',
+          message_attachments: [
+            {
+              id: 'att-1',
+              storage_path: 'conv-1/user-1/clip.mp4',
+              media_type: 'video',
+              mime_type: 'video/mp4',
+              size_bytes: 2_000_000,
+              width: 1280,
+              height: 720,
+              duration_ms: 15_000,
+              uploader_id: 'user-1',
+              created_at: '2026-07-15T10:00:00Z',
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+    const order = jest.fn().mockReturnValue({ limit });
+    const eq = jest.fn().mockReturnValue({ order });
+    const select = jest.fn().mockReturnValue({ eq });
+    mockFrom.mockReturnValue({ select });
+
+    const [message] = await fetchMessages('conv-1');
+
+    expect(message.attachment).toEqual({
+      id: 'att-1',
+      messageId: 'm1',
+      conversationId: 'conv-1',
+      uploaderId: 'user-1',
+      mediaType: 'video',
+      storagePath: 'conv-1/user-1/clip.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 2_000_000,
+      durationMs: 15_000,
+      width: 1280,
+      height: 720,
+      createdAt: '2026-07-15T10:00:00Z',
+    });
+  });
 });
 
 describe('sendImageMessage', () => {
@@ -246,6 +296,125 @@ describe('sendImageMessage', () => {
   });
 });
 
+describe('sendVideoMessage', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+  });
+
+  it("crée un message vidéo via la RPC create_video_message et retourne le message avec sa pièce jointe", async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          message_id: 'm1',
+          conversation_id: 'conv-1',
+          sender_id: 'user-1',
+          content: '',
+          created_at: '2026-07-15T10:00:00Z',
+          attachment_id: 'att-1',
+          storage_path: 'conv-1/user-1/clip.mp4',
+          mime_type: 'video/mp4',
+          size_bytes: 2_000_000,
+          duration_ms: 15_000,
+          width: 1280,
+          height: 720,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await sendVideoMessage({
+      conversationId: 'conv-1',
+      storagePath: 'conv-1/user-1/clip.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 2_000_000,
+      durationMs: 15_000,
+      width: 1280,
+      height: 720,
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith('create_video_message', {
+      p_conversation_id: 'conv-1',
+      p_storage_path: 'conv-1/user-1/clip.mp4',
+      p_mime_type: 'video/mp4',
+      p_size_bytes: 2_000_000,
+      p_duration_ms: 15_000,
+      p_width: 1280,
+      p_height: 720,
+      p_content: '',
+    });
+    expect(result).toEqual({
+      id: 'm1',
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: '',
+      createdAt: '2026-07-15T10:00:00Z',
+      attachment: {
+        id: 'att-1',
+        messageId: 'm1',
+        conversationId: 'conv-1',
+        uploaderId: 'user-1',
+        mediaType: 'video',
+        storagePath: 'conv-1/user-1/clip.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 2_000_000,
+        durationMs: 15_000,
+        width: 1280,
+        height: 720,
+        createdAt: '2026-07-15T10:00:00Z',
+      },
+    });
+  });
+
+  it("ne contient jamais d'URL signée dans les paramètres envoyés à la RPC (seulement storage_path)", async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          message_id: 'm1',
+          conversation_id: 'conv-1',
+          sender_id: 'user-1',
+          content: '',
+          created_at: '2026-07-15T10:00:00Z',
+          attachment_id: 'att-1',
+          storage_path: 'conv-1/user-1/clip.mp4',
+          mime_type: 'video/mp4',
+          size_bytes: 2_000_000,
+          duration_ms: 15_000,
+          width: null,
+          height: null,
+        },
+      ],
+      error: null,
+    });
+
+    await sendVideoMessage({
+      conversationId: 'conv-1',
+      storagePath: 'conv-1/user-1/clip.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 2_000_000,
+      durationMs: 15_000,
+    });
+
+    const params = mockRpc.mock.calls[0][1];
+    expect(Object.keys(params).sort()).toEqual(
+      ['p_content', 'p_conversation_id', 'p_duration_ms', 'p_height', 'p_mime_type', 'p_size_bytes', 'p_storage_path', 'p_width'].sort(),
+    );
+  });
+
+  it("remonte une erreur (ex. utilisateur non membre de la conversation) sous forme d'exception", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Conversation introuvable.' } });
+
+    await expect(
+      sendVideoMessage({
+        conversationId: 'conv-1',
+        storagePath: 'conv-1/user-1/clip.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 2_000_000,
+        durationMs: 15_000,
+      }),
+    ).rejects.toThrow('Conversation introuvable.');
+  });
+});
+
 describe('fetchMessageById', () => {
   beforeEach(() => {
     mockFrom.mockReset();
@@ -349,6 +518,56 @@ describe('Message et MessageAttachment ne contiennent jamais de champ email ni d
         'storagePath',
         'mimeType',
         'sizeBytes',
+        'width',
+        'height',
+        'createdAt',
+      ].sort(),
+    );
+  });
+
+  it('la forme du message vidéo mappé (avec pièce jointe) est exactement celle attendue (aucune URL, aucun jeton)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          message_id: 'm1',
+          conversation_id: 'conv-1',
+          sender_id: 'user-1',
+          content: '',
+          created_at: '2026-07-15T10:00:00Z',
+          attachment_id: 'att-1',
+          storage_path: 'conv-1/user-1/clip.mp4',
+          mime_type: 'video/mp4',
+          size_bytes: 1,
+          duration_ms: 1000,
+          width: null,
+          height: null,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await sendVideoMessage({
+      conversationId: 'conv-1',
+      storagePath: 'conv-1/user-1/clip.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 1,
+      durationMs: 1000,
+    });
+
+    expect(Object.keys(result).sort()).toEqual(
+      ['id', 'conversationId', 'senderId', 'content', 'createdAt', 'attachment'].sort(),
+    );
+    expect(Object.keys(result.attachment!).sort()).toEqual(
+      [
+        'id',
+        'messageId',
+        'conversationId',
+        'uploaderId',
+        'mediaType',
+        'storagePath',
+        'mimeType',
+        'sizeBytes',
+        'durationMs',
         'width',
         'height',
         'createdAt',

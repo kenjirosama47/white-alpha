@@ -1,28 +1,43 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as tus from 'tus-js-client';
 
 import { supabase } from '@/lib/supabase';
 import {
   generateStoragePath,
   getSignedAttachmentUrl,
   pickImageFromLibrary,
+  pickVideoFromLibrary,
+  recoverPendingMediaPick,
   removeAttachmentFile,
   uploadAttachment,
+  uploadVideoResumable,
+  VideoUploadCancelledError,
   type PickedImage,
+  type PickedVideo,
 } from '@/services/media';
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
+  getPendingResultAsync: jest.fn(),
+}));
+
+jest.mock('tus-js-client', () => ({
+  Upload: jest.fn(),
 }));
 
 jest.mock('@/lib/supabase', () => ({
-  supabase: { storage: { from: jest.fn() } },
+  supabase: { storage: { from: jest.fn() }, auth: { getSession: jest.fn() } },
+  SUPABASE_URL: 'https://testproj.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
 }));
 
 const mockStorageFrom = supabase.storage.from as jest.Mock;
+const mockGetSession = supabase.auth.getSession as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-access-token' } }, error: null });
 });
 
 describe('generateStoragePath', () => {
@@ -175,3 +190,216 @@ describe('getSignedAttachmentUrl', () => {
     await expect(getSignedAttachmentUrl('conv-1/user-1/abc.jpg')).rejects.toThrow("Impossible de charger l'image");
   });
 });
+
+describe('pickVideoFromLibrary', () => {
+  it('retourne null quand la sélection est annulée', async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: null });
+
+    await expect(pickVideoFromLibrary()).resolves.toBeNull();
+  });
+
+  it('lève une erreur en français si la permission bibliothèque est refusée', async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false });
+
+    await expect(pickVideoFromLibrary()).rejects.toThrow('Accès à tes vidéos refusé');
+    expect(ImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
+  });
+
+  it("rejette un asset dont le type MIME n'est pas MP4", async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///clip.mov', mimeType: 'video/quicktime', fileSize: 1000, duration: 5000, width: 100, height: 100 }],
+    });
+
+    await expect(pickVideoFromLibrary()).rejects.toThrow('Format vidéo non pris en charge');
+  });
+
+  it('retourne les informations de la vidéo sélectionnée, sans jamais demander la caméra', async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///clip.mp4', mimeType: 'video/mp4', fileSize: 2_000_000, duration: 15_000, width: 1280, height: 720 }],
+    });
+
+    const result = await pickVideoFromLibrary();
+
+    expect(result).toEqual<PickedVideo>({
+      uri: 'file:///clip.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 2_000_000,
+      durationMs: 15_000,
+      width: 1280,
+      height: 720,
+    });
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ mediaTypes: ['videos'] }));
+  });
+});
+
+describe('recoverPendingMediaPick', () => {
+  it("retourne null s'il n'y a rien à récupérer", async () => {
+    (ImagePicker.getPendingResultAsync as jest.Mock).mockResolvedValue(null);
+    await expect(recoverPendingMediaPick()).resolves.toBeNull();
+  });
+
+  it('retourne null pour un résultat annulé', async () => {
+    (ImagePicker.getPendingResultAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: null });
+    await expect(recoverPendingMediaPick()).resolves.toBeNull();
+  });
+
+  it('récupère une vidéo perdue (activité Android détruite pendant le sélecteur)', async () => {
+    (ImagePicker.getPendingResultAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [
+        { type: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4', fileSize: 500, duration: 3000, width: 640, height: 480 },
+      ],
+    });
+
+    await expect(recoverPendingMediaPick()).resolves.toEqual({
+      kind: 'video',
+      data: { uri: 'file:///clip.mp4', mimeType: 'video/mp4', sizeBytes: 500, durationMs: 3000, width: 640, height: 480 },
+    });
+  });
+
+  it('récupère une photo perdue (activité Android détruite pendant le sélecteur)', async () => {
+    (ImagePicker.getPendingResultAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ type: 'image', uri: 'file:///photo.jpg', mimeType: 'image/jpeg', fileSize: 500, width: 100, height: 100 }],
+    });
+
+    await expect(recoverPendingMediaPick()).resolves.toEqual({
+      kind: 'image',
+      data: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 500, width: 100, height: 100 },
+    });
+  });
+});
+
+describe('uploadVideoResumable', () => {
+  const picked: PickedVideo = {
+    uri: 'file:///clip.mp4',
+    mimeType: 'video/mp4',
+    sizeBytes: 2_000_000,
+    durationMs: 15_000,
+    width: 1280,
+    height: 720,
+  };
+
+  let mockUploadInstance: { start: jest.Mock; abort: jest.Mock };
+  let capturedOptions: tus.UploadOptions | undefined;
+
+  beforeEach(() => {
+    mockUploadInstance = { start: jest.fn(), abort: jest.fn() };
+    capturedOptions = undefined;
+    (tus.Upload as unknown as jest.Mock).mockImplementation((_file: unknown, options: tus.UploadOptions) => {
+      capturedOptions = options;
+      return mockUploadInstance;
+    });
+  });
+
+  it('rejette une vidéo trop volumineuse (taille réelle du blob) avant tout upload', async () => {
+    const bigBlob = { size: 50 * 1024 * 1024 + 1 } as Blob;
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, bigBlob);
+
+    await expect(handle.promise).rejects.toThrow('50 Mo');
+    expect(tus.Upload).not.toHaveBeenCalled();
+  });
+
+  it('rejette une vidéo trop longue avant tout upload', async () => {
+    const blob = { size: 1000 } as Blob;
+    const tooLong = { ...picked, durationMs: 60_001 };
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', tooLong, blob);
+
+    await expect(handle.promise).rejects.toThrow('60 secondes');
+    expect(tus.Upload).not.toHaveBeenCalled();
+  });
+
+  it('construit un upload TUS avec endpoint, en-têtes, métadonnées et paramètres de reprise corrects', async () => {
+    const blob = { size: 2_000_000 } as Blob;
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    expect(tus.Upload).toHaveBeenCalledWith(blob, expect.any(Object));
+    expect(capturedOptions?.endpoint).toBe('https://testproj.storage.supabase.co/storage/v1/upload/resumable');
+    expect(capturedOptions?.headers).toEqual({
+      authorization: 'Bearer test-access-token',
+      apikey: 'test-publishable-key',
+      'x-upsert': 'false',
+    });
+    expect(capturedOptions?.metadata).toEqual(
+      expect.objectContaining({ bucketName: 'chat-media', contentType: 'video/mp4' }),
+    );
+    expect(capturedOptions?.metadata?.objectName).toMatch(/^conv-1\/user-1\/[0-9a-f-]{36}\.mp4$/);
+    expect(capturedOptions?.chunkSize).toBe(6 * 1024 * 1024);
+    expect(capturedOptions?.retryDelays).toEqual([0, 3000, 5000, 10000, 20000]);
+    expect(mockUploadInstance.start).toHaveBeenCalledTimes(1);
+
+    capturedOptions?.onSuccess?.({ lastResponse: {} as tus.HttpResponse });
+    await expect(handle.promise).resolves.toEqual({
+      storagePath: expect.stringMatching(/^conv-1\/user-1\/[0-9a-f-]{36}\.mp4$/),
+      sizeBytes: 2_000_000,
+    });
+  });
+
+  it('suit la progression via onProgress', async () => {
+    const blob = { size: 2_000_000 } as Blob;
+    const onProgress = jest.fn();
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob, onProgress);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    capturedOptions?.onProgress?.(1_000_000, 2_000_000);
+    expect(onProgress).toHaveBeenCalledWith(50);
+
+    capturedOptions?.onSuccess?.({ lastResponse: {} as tus.HttpResponse });
+    await handle.promise;
+  });
+
+  it("remonte une erreur française générique si l'upload échoue, sans exposer le jeton d'accès", async () => {
+    const blob = { size: 2_000_000 } as Blob;
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    capturedOptions?.onError?.(new Error('tus: unexpected response code 500, Authorization: Bearer test-access-token'));
+
+    await expect(handle.promise).rejects.toThrow("Impossible d'envoyer la vidéo");
+    try {
+      await handle.promise;
+    } catch (err) {
+      expect(err instanceof Error ? err.message : '').not.toContain('test-access-token');
+    }
+  });
+
+  it('cancel() abandonne l’upload TUS et rejette avec VideoUploadCancelledError', async () => {
+    const blob = { size: 2_000_000 } as Blob;
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    handle.cancel();
+
+    await expect(handle.promise).rejects.toBeInstanceOf(VideoUploadCancelledError);
+    expect(mockUploadInstance.abort).toHaveBeenCalledWith(true);
+  });
+
+  it('rejette sans jamais appeler tus.Upload si la session est expirée', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+    const blob = { size: 2_000_000 } as Blob;
+
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+
+    await expect(handle.promise).rejects.toThrow('Session expirée');
+    expect(tus.Upload).not.toHaveBeenCalled();
+  });
+});
+
+/** Attend que le prochain tick microtâche ait laissé `uploadVideoResumable` appeler `tus.Upload`. */
+async function waitForCapturedOptions(getOptions: () => tus.UploadOptions | undefined): Promise<void> {
+  for (let i = 0; i < 10 && !getOptions(); i++) {
+    await Promise.resolve();
+  }
+}

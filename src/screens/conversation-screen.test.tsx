@@ -26,6 +26,13 @@ jest.mock('@/lib/supabase', () => ({
   supabase: { storage: { from: jest.fn() } },
 }));
 
+// message-video importe expo-video, dont le binding natif ne peut pas être
+// chargé dans l'environnement Jest (hors runtime natif) : ce test d'écran ne
+// porte pas sur la lecture vidéo elle-même (voir message-video.test.tsx).
+jest.mock('@/components/message-video', () => ({
+  MessageVideo: () => null,
+}));
+
 const mockSend = jest.fn();
 jest.mock('@/hooks/use-messages', () => ({
   useMessages: () => ({
@@ -41,32 +48,55 @@ jest.mock('@/hooks/use-messages', () => ({
   }),
 }));
 
-const mockPick = jest.fn();
-const mockCancelImage = jest.fn();
-const mockSendImage = jest.fn();
-let mockPickedImage: { uri: string; mimeType: string; sizeBytes: number | null; width: number | null; height: number | null } | null =
-  null;
-let mockImageError: string | null = null;
+const mockPickImage = jest.fn();
+const mockPickVideo = jest.fn();
+const mockCancelMedia = jest.fn();
+const mockCancelUpload = jest.fn();
+const mockSendMedia = jest.fn();
+type MockPickedMedia =
+  | { kind: 'image'; data: { uri: string; mimeType: string; sizeBytes: number | null; width: number | null; height: number | null } }
+  | {
+      kind: 'video';
+      data: {
+        uri: string;
+        mimeType: string;
+        sizeBytes: number | null;
+        durationMs: number | null;
+        width: number | null;
+        height: number | null;
+      };
+    };
+let mockPickedMedia: MockPickedMedia | null = null;
+let mockMediaError: string | null = null;
+let mockUploadProgress: number | null = null;
+let mockIsUploadingMedia = false;
 
 jest.mock('@/hooks/use-media-upload', () => ({
   useMediaUpload: () => ({
-    pickedImage: mockPickedImage,
-    isUploading: false,
-    error: mockImageError,
-    pick: mockPick,
-    cancel: mockCancelImage,
-    send: mockSendImage,
+    pickedMedia: mockPickedMedia,
+    isUploading: mockIsUploadingMedia,
+    uploadProgress: mockUploadProgress,
+    error: mockMediaError,
+    pickImage: mockPickImage,
+    pickVideo: mockPickVideo,
+    cancel: mockCancelMedia,
+    cancelUpload: mockCancelUpload,
+    send: mockSendMedia,
   }),
 }));
 
 describe('ConversationScreen — composer', () => {
   beforeEach(() => {
     mockSend.mockReset();
-    mockPick.mockReset();
-    mockCancelImage.mockReset();
-    mockSendImage.mockReset();
-    mockPickedImage = null;
-    mockImageError = null;
+    mockPickImage.mockReset();
+    mockPickVideo.mockReset();
+    mockCancelMedia.mockReset();
+    mockCancelUpload.mockReset();
+    mockSendMedia.mockReset();
+    mockPickedMedia = null;
+    mockMediaError = null;
+    mockUploadProgress = null;
+    mockIsUploadingMedia = false;
   });
 
   it("le bouton Envoyer reste désactivé et n'appelle pas send tant que le champ est vide", async () => {
@@ -121,14 +151,18 @@ describe('ConversationScreen — composer', () => {
   });
 });
 
-describe('ConversationScreen — photo', () => {
+describe('ConversationScreen — photo et vidéo', () => {
   beforeEach(() => {
     mockSend.mockReset();
-    mockPick.mockReset();
-    mockCancelImage.mockReset();
-    mockSendImage.mockReset();
-    mockPickedImage = null;
-    mockImageError = null;
+    mockPickImage.mockReset();
+    mockPickVideo.mockReset();
+    mockCancelMedia.mockReset();
+    mockCancelUpload.mockReset();
+    mockSendMedia.mockReset();
+    mockPickedMedia = null;
+    mockMediaError = null;
+    mockUploadProgress = null;
+    mockIsUploadingMedia = false;
   });
 
   it('le bouton Photo déclenche la sélection depuis la bibliothèque', async () => {
@@ -136,11 +170,22 @@ describe('ConversationScreen — photo', () => {
 
     fireEvent.press(screen.getByText('Photo'));
 
-    expect(mockPick).toHaveBeenCalledTimes(1);
+    expect(mockPickImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('le bouton Vidéo déclenche la sélection depuis la bibliothèque', async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByText('Vidéo'));
+
+    expect(mockPickVideo).toHaveBeenCalledTimes(1);
   });
 
   it("affiche un aperçu avec Annuler/Envoyer une fois une photo sélectionnée, et conserve le texte déjà saisi", async () => {
-    mockPickedImage = { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 };
+    mockPickedMedia = {
+      kind: 'image',
+      data: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 },
+    };
     await render(<ConversationScreen />);
 
     const input = screen.getByPlaceholderText('Écrire un message...');
@@ -151,27 +196,75 @@ describe('ConversationScreen — photo', () => {
     expect(screen.getAllByText('Envoyer').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.press(screen.getByText('Annuler'));
-    expect(mockCancelImage).toHaveBeenCalledTimes(1);
-    // Annuler la photo ne doit jamais vider le texte déjà saisi.
+    expect(mockCancelMedia).toHaveBeenCalledTimes(1);
+    // Annuler le média ne doit jamais vider le texte déjà saisi.
     expect(input.props.value).toBe('Texte en cours de rédaction');
   });
 
-  it("le bouton Envoyer de l'aperçu déclenche l'envoi de l'image", async () => {
-    mockPickedImage = { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 };
+  it("le bouton Envoyer de l'aperçu déclenche l'envoi du média", async () => {
+    mockPickedMedia = {
+      kind: 'image',
+      data: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 },
+    };
     await render(<ConversationScreen />);
 
-    // Deux boutons "Envoyer" existent (texte + photo) : l'aperçu photo est
+    // Deux boutons "Envoyer" existent (texte + média) : l'aperçu média est
     // rendu avant la barre de composition dans l'arbre, donc en premier.
     const sendButtons = screen.getAllByText('Envoyer');
     fireEvent.press(sendButtons[0]);
 
-    await waitFor(() => expect(mockSendImage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockSendMedia).toHaveBeenCalledTimes(1));
   });
 
-  it("affiche l'erreur de sélection/envoi de la photo en français", async () => {
-    mockImageError = 'Accès à tes photos refusé. Autorise l’accès dans les réglages pour envoyer une image.';
+  it("affiche l'erreur de sélection/envoi du média en français", async () => {
+    mockMediaError = 'Accès à tes photos refusé. Autorise l’accès dans les réglages pour envoyer une image.';
     await render(<ConversationScreen />);
 
-    expect(screen.getByText(mockImageError)).toBeTruthy();
+    expect(screen.getByText(mockMediaError)).toBeTruthy();
+  });
+
+  it('affiche la durée et la taille pour un aperçu vidéo, et le bouton Annuler l’envoi pendant l’upload', async () => {
+    mockPickedMedia = {
+      kind: 'video',
+      data: { uri: 'file:///clip.mp4', mimeType: 'video/mp4', sizeBytes: 2_000_000, durationMs: 15_000, width: 1280, height: 720 },
+    };
+    mockIsUploadingMedia = true;
+    mockUploadProgress = 42;
+    await render(<ConversationScreen />);
+
+    expect(screen.getByText('0:15 · 1.9 Mo')).toBeTruthy();
+    fireEvent.press(screen.getByText('Annuler l’envoi'));
+    expect(mockCancelUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('le bouton Photo/Vidéo est désactivé pendant qu’un média est en cours de préparation ou d’upload', async () => {
+    mockPickedMedia = {
+      kind: 'image',
+      data: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 },
+    };
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByText('Vidéo'));
+    // Une pièce jointe est déjà sélectionnée : un second média ne doit pas être lancé.
+    expect(mockPickVideo).not.toHaveBeenCalled();
+  });
+
+  it("n'empêche jamais l'envoi d'un message texte pendant la préparation d'une vidéo", async () => {
+    mockPickedMedia = {
+      kind: 'video',
+      data: { uri: 'file:///clip.mp4', mimeType: 'video/mp4', sizeBytes: 2_000_000, durationMs: 15_000, width: 1280, height: 720 },
+    };
+    mockIsUploadingMedia = true;
+    mockSend.mockResolvedValue(true);
+    await render(<ConversationScreen />);
+
+    const input = screen.getByPlaceholderText('Écrire un message...');
+    fireEvent.changeText(input, 'Message texte indépendant');
+    await waitFor(() => expect(input.props.value).toBe('Message texte indépendant'));
+
+    const sendButtons = screen.getAllByText('Envoyer');
+    fireEvent.press(sendButtons[sendButtons.length - 1]);
+
+    await waitFor(() => expect(mockSend).toHaveBeenCalledWith('Message texte indépendant'));
   });
 });

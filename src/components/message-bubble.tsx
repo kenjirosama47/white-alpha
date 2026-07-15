@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { MessageImage } from '@/components/message-image';
+import { MessageVideo } from '@/components/message-video';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -24,12 +25,20 @@ export function MessageBubble({ message, isOwnMessage, onImagePress }: MessageBu
           styles.bubble,
           isOwnMessage ? styles.bubbleOwn : { backgroundColor: theme.backgroundElement },
         ]}>
-        {message.attachment && (
+        {message.attachment?.mediaType === 'image' && (
           <MessageImage
             storagePath={message.attachment.storagePath}
             width={message.attachment.width}
             height={message.attachment.height}
             onPress={(url) => onImagePress?.(url)}
+          />
+        )}
+        {message.attachment?.mediaType === 'video' && (
+          <MessageVideo
+            storagePath={message.attachment.storagePath}
+            width={message.attachment.width}
+            height={message.attachment.height}
+            durationMs={message.attachment.durationMs}
           />
         )}
         {hasText && (

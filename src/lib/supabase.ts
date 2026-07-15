@@ -12,6 +12,10 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
+/** Exportées pour l'upload TUS (Phase 4B), qui a besoin du hostname Storage direct et de la clé publishable — jamais d'un jeton secret. */
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_PUBLISHABLE_KEY = supabasePublishableKey;
+
 // AsyncStorage accède à `window`, absent lors du rendu statique/SSR web.
 // Sur web, on laisse supabase-js utiliser son storage par défaut
 // (déjà protégé contre l'absence de `window`).

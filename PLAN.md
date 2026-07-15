@@ -124,10 +124,50 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   vérifiée ; bucket `chat-media` confirmé toujours privé ; aucun compte réel
   affecté. Phase 4A close.
 
-### Phase 4B — Vidéos enregistrées (non commencée)
-- Upload de vidéos déjà enregistrées via Supabase Storage.
-- Prévisualisation dans la conversation.
-- Compression/limites de taille côté client.
+### Phase 4B — Vidéos enregistrées — Développée, migration distante appliquée
+- Bibliothèque uniquement (aucune caméra, aucun micro, une seule vidéo par
+  message), MP4 exclusivement, 60 secondes / 50 Mo maximum.
+- Modèle `message_type`/`media_type` étendu à `'video'` (migration
+  `20260715150000_add_video_messages.sql`, **poussée sur le projet
+  distant**) : nouvelle colonne `duration_ms` sur `message_attachments`,
+  contraintes MIME/taille/durée conditionnelles au type — contraintes photo
+  (10 Mo, jpeg/png/webp) **inchangées**, vérifié sur le projet distant.
+- RPC `create_video_message` (`SECURITY DEFINER`, `search_path` explicite,
+  `sender_id`/`uploader_id` exclusivement via `auth.uid()`, `EXECUTE` réservé
+  à `authenticated`) — vérifiée sur le projet distant. `create_text_message`/
+  `create_image_message` inchangées, INSERT direct sur `messages`/
+  `message_attachments` toujours révoqué (revérifié après la migration).
+- Bucket `chat-media` (inchangé, toujours privé) : `allowed_mime_types`
+  étendu à `video/mp4`, `file_size_limit` relevé à 52 428 800 (50 Mo) —
+  vérifié sur le projet distant. Policies `storage.objects` de la Phase 4A
+  réutilisées sans modification (déjà agnostiques à l'extension du fichier).
+- Upload reprenable (protocole TUS, `tus-js-client`) vers le hostname
+  Storage direct du projet : progression, délais de nouvelle tentative,
+  annulation, chemin UUID neuf à chaque envoi. Upload Storage effectué avant
+  l'appel RPC (non transactionnel avec la base, comme pour les photos) ;
+  suppression compensatoire du fichier Storage si la RPC échoue.
+- Lecture vidéo (`expo-video`, `useVideoPlayer`/`VideoView`) : contrôles
+  natifs, plein écran autorisé, aucune lecture automatique, boucle/PiP/
+  lecture en arrière-plan désactivés, lecteur chargé (`replaceAsync`)
+  uniquement au tap utilisateur, mis en pause au démontage. Composant
+  `src/components/message-video.tsx`.
+- Interface : choix Photo/Vidéo dans le composer, aperçu (durée/taille),
+  barre de progression, bouton Annuler l'envoi, envoi de texte jamais
+  bloqué pendant la préparation d'une vidéo, un seul média à la fois par
+  conversation.
+- URL signée temporaire pour l'affichage (jamais persistée en base — vérifié
+  : aucune colonne URL dans le schéma distant), renouvelée à l'expiration.
+- **Limitation MVP documentée** : la reprise d'upload après coupure réseau
+  est prise en charge pendant la session en cours (délais de nouvelle
+  tentative de `tus-js-client`, upload toujours en mémoire) ; **elle n'est
+  pas prise en charge après un redémarrage complet de l'application**
+  (aucune persistance `urlStorage` de l'upload en cours). À traiter dans une
+  phase ultérieure si nécessaire.
+- 68 tests pgTAP locaux passent (14 + 8 + 26 Phase 4A + 20 Phase 4B),
+  116 tests unitaires Jest passent.
+- **Reste à faire : test manuel de l'envoi/réception de vidéos avec deux
+  comptes réels** sur la version Preview Android autonome (nouveau build
+  requis : `expo-video` modifie la configuration native).
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.

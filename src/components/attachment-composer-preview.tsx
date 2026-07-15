@@ -4,69 +4,123 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import type { PickedImage } from '@/services/media';
+import type { PickedMedia } from '@/services/media';
+import { formatDuration, formatFileSize } from '@/utils/format';
 
 type AttachmentComposerPreviewProps = {
-  image: PickedImage;
+  media: PickedMedia;
   isUploading: boolean;
+  /** Pourcentage 0-100 pendant l'upload d'une vidéo ; `null` sinon (photo, ou pas encore démarré). */
+  uploadProgress: number | null;
   error: string | null;
   onCancel: () => void;
+  onCancelUpload: () => void;
   onSend: () => void;
 };
 
-/** Aperçu de l'image sélectionnée avant envoi, avec Annuler/Envoyer et l'état de chargement. */
-export function AttachmentComposerPreview({ image, isUploading, error, onCancel, onSend }: AttachmentComposerPreviewProps) {
+/** Aperçu du média sélectionné (photo ou vidéo) avant envoi, avec Annuler/Envoyer, progression et annulation d'upload. */
+export function AttachmentComposerPreview({
+  media,
+  isUploading,
+  uploadProgress,
+  error,
+  onCancel,
+  onCancelUpload,
+  onSend,
+}: AttachmentComposerPreviewProps) {
   return (
     <ThemedView type="backgroundElement" style={styles.container}>
-      <Image source={{ uri: image.uri }} style={styles.thumbnail} contentFit="cover" />
-      <View style={styles.actions}>
-        {error && (
-          <ThemedText type="small" style={styles.error}>
-            {error}
-          </ThemedText>
-        )}
-        <View style={styles.buttonsRow}>
-          <Pressable
-            onPress={onCancel}
-            disabled={isUploading}
-            hitSlop={8}
-            style={({ pressed }) => [styles.button, (pressed || isUploading) && styles.pressed]}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Annuler
+      <View style={styles.row}>
+        {media.kind === 'image' ? (
+          <Image source={{ uri: media.data.uri }} style={styles.thumbnail} contentFit="cover" />
+        ) : (
+          <View style={styles.videoThumbnail}>
+            <ThemedText type="smallBold" style={styles.videoIcon}>
+              ▶
             </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={onSend}
-            disabled={isUploading}
-            style={({ pressed }) => [styles.button, styles.sendButton, (pressed || isUploading) && styles.pressed]}>
-            {isUploading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <ThemedText type="smallBold" style={styles.sendButtonLabel}>
-                Envoyer
+          </View>
+        )}
+        <View style={styles.actions}>
+          {media.kind === 'video' && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {formatDuration(media.data.durationMs ?? 0)}
+              {media.data.sizeBytes != null ? ` · ${formatFileSize(media.data.sizeBytes)}` : ''}
+            </ThemedText>
+          )}
+          {error && (
+            <ThemedText type="small" style={styles.error}>
+              {error}
+            </ThemedText>
+          )}
+          <View style={styles.buttonsRow}>
+            <Pressable
+              onPress={onCancel}
+              disabled={isUploading}
+              hitSlop={8}
+              style={({ pressed }) => [styles.button, (pressed || isUploading) && styles.pressed]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Annuler
               </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={onSend}
+              disabled={isUploading}
+              style={({ pressed }) => [styles.button, styles.sendButton, (pressed || isUploading) && styles.pressed]}>
+              {isUploading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <ThemedText type="smallBold" style={styles.sendButtonLabel}>
+                  Envoyer
+                </ThemedText>
+              )}
+            </Pressable>
+            {isUploading && media.kind === 'video' && (
+              <Pressable onPress={onCancelUpload} hitSlop={8} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
+                <ThemedText type="smallBold" style={styles.cancelUploadLabel}>
+                  Annuler l’envoi
+                </ThemedText>
+              </Pressable>
             )}
-          </Pressable>
+          </View>
         </View>
       </View>
+      {isUploading && media.kind === 'video' && uploadProgress != null && (
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+        </View>
+      )}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    gap: Spacing.three,
+    gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.three,
     marginHorizontal: Spacing.three,
     marginTop: Spacing.two,
   },
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
   thumbnail: {
     width: 64,
     height: 64,
     borderRadius: Spacing.two,
+  },
+  videoThumbnail: {
+    width: 64,
+    height: 64,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#00000029',
+  },
+  videoIcon: {
+    fontSize: 20,
   },
   actions: {
     flex: 1,
@@ -75,6 +129,7 @@ const styles = StyleSheet.create({
   },
   buttonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   button: {
@@ -88,10 +143,23 @@ const styles = StyleSheet.create({
   sendButtonLabel: {
     color: '#ffffff',
   },
+  cancelUploadLabel: {
+    color: '#D14343',
+  },
   pressed: {
     opacity: 0.6,
   },
   error: {
     color: '#D14343',
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#00000014',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#208AEF',
   },
 });

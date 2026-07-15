@@ -1,15 +1,25 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as tus from 'tus-js-client';
 
-import { supabase } from '@/lib/supabase';
-import { isAllowedImageMimeType, validateImageFile, type ImageMimeType } from '@/types/chat';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL, supabase } from '@/lib/supabase';
+import {
+  isAllowedImageMimeType,
+  isAllowedVideoMimeType,
+  validateImageFile,
+  validateVideoFile,
+  type ImageMimeType,
+  type VideoMimeType,
+} from '@/types/chat';
 
 export const CHAT_MEDIA_BUCKET = 'chat-media';
 export const DEFAULT_SIGNED_URL_TTL_SECONDS = 3600;
+const MAX_VIDEO_DURATION_SECONDS = 60;
 
-const MIME_EXTENSIONS: Record<ImageMimeType, string> = {
+const MIME_EXTENSIONS: Record<ImageMimeType | VideoMimeType, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
 };
 
 export type PickedImage = {
@@ -20,6 +30,18 @@ export type PickedImage = {
   width: number | null;
   height: number | null;
 };
+
+export type PickedVideo = {
+  uri: string;
+  mimeType: VideoMimeType;
+  /** Peut être `null` sur certains appareils (surtout Android) : revalidé avec la taille réelle avant upload. */
+  sizeBytes: number | null;
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+};
+
+export type PickedMedia = { kind: 'image'; data: PickedImage } | { kind: 'video'; data: PickedVideo };
 
 /**
  * UUID v4. Pas besoin d'aléa cryptographique ici : le chemin de stockage est
@@ -34,8 +56,12 @@ function uuidv4(): string {
   });
 }
 
-/** Chemin obligatoire conversation_id/uploader_id/uuid.extension (imposé aussi côté policies Storage). */
-export function generateStoragePath(conversationId: string, uploaderId: string, mimeType: ImageMimeType): string {
+/** Chemin obligatoire conversation_id/uploader_id/uuid.extension (imposé aussi côté policies Storage), jamais le nom original ni écrasé. */
+export function generateStoragePath(
+  conversationId: string,
+  uploaderId: string,
+  mimeType: ImageMimeType | VideoMimeType,
+): string {
   return `${conversationId}/${uploaderId}/${uuidv4()}.${MIME_EXTENSIONS[mimeType]}`;
 }
 
@@ -71,6 +97,90 @@ export async function pickImageFromLibrary(): Promise<PickedImage | null> {
     width: asset.width ?? null,
     height: asset.height ?? null,
   };
+}
+
+/**
+ * Ouvre le sélecteur de vidéos de la bibliothèque (jamais la caméra, jamais
+ * le micro, une seule vidéo). Retourne `null` si l'utilisateur annule.
+ * `videoMaxDuration` est un garde-fou côté sélecteur natif ; la validation
+ * faisant foi reste `validateVideoFile`, appliquée avant l'upload avec la
+ * taille réelle du fichier.
+ */
+export async function pickVideoFromLibrary(): Promise<PickedVideo | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    throw new Error('Accès à tes vidéos refusé. Autorise l’accès dans les réglages pour envoyer une vidéo.');
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['videos'],
+    videoMaxDuration: MAX_VIDEO_DURATION_SECONDS,
+  });
+
+  if (result.canceled || result.assets.length === 0) {
+    return null;
+  }
+
+  const asset = result.assets[0];
+  if (!isAllowedVideoMimeType(asset.mimeType)) {
+    throw new Error('Format vidéo non pris en charge. Utilise MP4.');
+  }
+
+  return {
+    uri: asset.uri,
+    mimeType: asset.mimeType,
+    sizeBytes: asset.fileSize ?? null,
+    durationMs: asset.duration ?? null,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+  };
+}
+
+/**
+ * Sur Android, le système peut détruire l'activité pendant que le sélecteur
+ * est ouvert (ex. « Ne pas conserver les activités » dans les options
+ * développeur) : le résultat de l'appel `launchImageLibraryAsync` d'origine
+ * est alors perdu (nouveau contexte JS après recréation), mais reste
+ * récupérable via `getPendingResultAsync`. À appeler une fois au montage de
+ * l'écran de conversation.
+ */
+export async function recoverPendingMediaPick(): Promise<PickedMedia | null> {
+  const pending = await ImagePicker.getPendingResultAsync();
+
+  if (!pending || !('canceled' in pending) || pending.canceled || !pending.assets || pending.assets.length === 0) {
+    return null;
+  }
+
+  const asset = pending.assets[0];
+
+  if (asset.type === 'video' && isAllowedVideoMimeType(asset.mimeType)) {
+    return {
+      kind: 'video',
+      data: {
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.fileSize ?? null,
+        durationMs: asset.duration ?? null,
+        width: asset.width ?? null,
+        height: asset.height ?? null,
+      },
+    };
+  }
+
+  if (asset.type === 'image' && isAllowedImageMimeType(asset.mimeType)) {
+    return {
+      kind: 'image',
+      data: {
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        sizeBytes: asset.fileSize ?? null,
+        width: asset.width ?? null,
+        height: asset.height ?? null,
+      },
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -118,8 +228,9 @@ export async function removeAttachmentFile(storagePath: string): Promise<void> {
 }
 
 /**
- * URL signée temporaire pour afficher une image privée. Ne jamais persister
- * la valeur retournée : elle doit être redemandée à l'expiration.
+ * URL signée temporaire pour afficher un média privé (image ou vidéo). Ne
+ * jamais persister la valeur retournée : elle doit être redemandée à
+ * l'expiration.
  */
 export async function getSignedAttachmentUrl(
   storagePath: string,
@@ -132,4 +243,115 @@ export async function getSignedAttachmentUrl(
   }
 
   return data.signedUrl;
+}
+
+/** Session courante, exclusivement pour authentifier l'upload TUS — jamais journalisée. */
+async function getAccessToken(): Promise<string> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) {
+    throw new Error('Session expirée. Reconnecte-toi.');
+  }
+  return data.session.access_token;
+}
+
+function buildResumableUploadEndpoint(): string {
+  const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
+  return `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable`;
+}
+
+/** Signale une annulation volontaire de l'upload en cours, distincte d'une véritable erreur réseau. */
+export class VideoUploadCancelledError extends Error {
+  constructor() {
+    super('Envoi de la vidéo annulé.');
+    this.name = 'VideoUploadCancelledError';
+  }
+}
+
+export type VideoUploadHandle = {
+  /** Résout `{ storagePath, sizeBytes }` au succès ; rejette avec `VideoUploadCancelledError` si `cancel()` est appelé, ou une erreur française sinon. */
+  promise: Promise<{ storagePath: string; sizeBytes: number }>;
+  cancel: () => void;
+};
+
+/**
+ * Upload reprenable (protocole TUS) d'une vidéo déjà sélectionnée et
+ * validée vers `chat-media`. À la différence des photos (upload direct), les
+ * vidéos peuvent être volumineuses : la progression, les délais de nouvelle
+ * tentative après coupure réseau et l'annulation sont gérés par
+ * `tus-js-client`. Le jeton de session sert uniquement d'en-tête
+ * d'authentification, jamais journalisé (aucun `console.log` des options
+ * d'upload ni des erreurs brutes de la bibliothèque TUS).
+ */
+export function uploadVideoResumable(
+  conversationId: string,
+  uploaderId: string,
+  picked: PickedVideo,
+  blob: Blob,
+  onProgress?: (percent: number) => void,
+): VideoUploadHandle {
+  const validation = validateVideoFile({
+    mimeType: picked.mimeType,
+    sizeBytes: blob.size,
+    durationMs: picked.durationMs,
+  });
+
+  const storagePath = generateStoragePath(conversationId, uploaderId, picked.mimeType);
+  let uploadInstance: tus.Upload | null = null;
+  let rejectPromise: ((reason: unknown) => void) | null = null;
+  let cancelled = false;
+
+  const promise = new Promise<{ storagePath: string; sizeBytes: number }>((resolve, reject) => {
+    rejectPromise = reject;
+
+    if (!validation.ok) {
+      reject(new Error(validation.error));
+      return;
+    }
+
+    getAccessToken()
+      .then((accessToken) => {
+        if (cancelled) return;
+
+        uploadInstance = new tus.Upload(blob, {
+          endpoint: buildResumableUploadEndpoint(),
+          retryDelays: [0, 3000, 5000, 10000, 20000],
+          chunkSize: 6 * 1024 * 1024,
+          removeFingerprintOnSuccess: true,
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            'x-upsert': 'false',
+          },
+          metadata: {
+            bucketName: CHAT_MEDIA_BUCKET,
+            objectName: storagePath,
+            contentType: picked.mimeType,
+          },
+          onError: () => {
+            // Erreur générique volontaire : ne jamais exposer le détail brut
+            // de tus-js-client (peut référencer la requête/réponse HTTP).
+            reject(new Error("Impossible d'envoyer la vidéo pour le moment."));
+          },
+          onProgress: (bytesUploaded, bytesTotal) => {
+            onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
+          },
+          onSuccess: () => {
+            resolve({ storagePath, sizeBytes: blob.size });
+          },
+        });
+        uploadInstance.start();
+      })
+      .catch((err) => {
+        reject(err instanceof Error ? err : new Error("Impossible d'envoyer la vidéo pour le moment."));
+      });
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      cancelled = true;
+      uploadInstance?.abort(true);
+      rejectPromise?.(new VideoUploadCancelledError());
+    },
+  };
 }
