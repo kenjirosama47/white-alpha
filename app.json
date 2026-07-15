@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.kenjiro.whitealpha"
+      "package": "com.kenjiro.whitealpha",
+      "versionCode": 2
     },
     "web": {
       "output": "static",
