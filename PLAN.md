@@ -83,7 +83,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 
 ## Phase 4 — Photos et vidéos
 
-### Phase 4A — Photos — Développée, migration distante appliquée
+### Phase 4A — Photos — Terminée et validée
 - Bucket Supabase Storage privé `chat-media` (jamais public) — vérifié sur le
   projet distant (`public = false`, limite 10 Mo, `image/jpeg`/`image/png`/
   `image/webp`).
@@ -113,9 +113,16 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 - États de lecture/livraison de base : reporté à une phase ultérieure.
 - 48 tests pgTAP locaux passent (14 + 8 Phase 3 mis à jour pour la nouvelle
   RPC + 26 Phase 4A), 74 tests unitaires Jest passent.
-- **Reste à faire : test manuel de l'envoi/réception de photos avec deux
-  comptes réels** sur la version Preview Android autonome (nouveau build
-  requis : `expo-image-picker` modifie les permissions natives).
+- **Validation manuelle complète — Terminée**, sur la version Preview Android
+  autonome (`versionCode` 3, build EAS avec `expo-image-picker`) : réception
+  d'une photo test en temps réel, ouverture en plein écran, sélection d'une
+  vraie photo depuis la bibliothèque Android, aperçu et annulation, envoi
+  téléphone → second compte, réception en temps réel côté destinataire,
+  conservation de l'image après fermeture/réouverture de l'app. Compte de
+  test et toutes ses données (profil, conversation, message, pièce jointe,
+  fichier Storage) supprimés après validation ; zéro donnée orpheline
+  vérifiée ; bucket `chat-media` confirmé toujours privé ; aucun compte réel
+  affecté. Phase 4A close.
 
 ### Phase 4B — Vidéos enregistrées (non commencée)
 - Upload de vidéos déjà enregistrées via Supabase Storage.
