@@ -54,8 +54,31 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   explicite, réservée à `authenticated` (`EXECUTE` refusé à `anon`/`public`,
   vérifié sur le projet distant), refuse tout appel non authentifié.
   22 tests pgTAP locaux passent (14 + 8 pour cette RPC).
-- Interface mobile (recherche, création de conversation, liste, messagerie
-  texte) : en cours (voir ci-dessous).
+- **Interface mobile — Écrans Conversations/Recherche/Discussion.** Architecture
+  séparée (`src/types/chat.ts`, `src/services/{profiles,conversations,messages}.ts`,
+  `src/hooks/{use-conversations,use-messages,use-user-search}.ts`, composants
+  dans `src/components/`, routes Expo Router `src/app/(app)/{index,search,
+  conversation/[id]}.tsx`) : aucune logique Supabase directement dans les
+  composants. Écran Conversations (états chargement/erreur/vide, actualisation
+  manuelle), écran Recherche (RPC `search_public_profiles`, anti-rebond,
+  exclusion de l'utilisateur courant, aucun email affiché), écran Discussion
+  (historique paginé, Realtime filtré par `conversation_id`, validation
+  1-4000 caractères, protection double envoi, nettoyage du channel au
+  démontage). 22 tests unitaires Jest/Testing Library (validation, services,
+  double envoi, nettoyage Realtime, état vide). Photos/vidéos/groupes/appels/
+  Assistant Claude/identité visuelle du loup : non commencés (hors périmètre
+  Phase 3).
+
+## Statut Phase 3 (synthèse)
+- Schéma distant (tables, RLS, RPC, durcissement, `list_my_conversations`) :
+  **appliqué et vérifié** sur le projet Supabase distant.
+- Interface mobile de discussion (Conversations, Recherche, Discussion) :
+  **terminée**, 22 tests unitaires passent, `tsc`/`lint`/`expo-doctor` au vert.
+- Dépendances Expo réalignées sur SDK 57 (`expo install --fix`, versions
+  patch uniquement) : `expo-doctor` 20/20.
+- **Reste à faire : test manuel avec deux comptes réels** sur la version
+  Preview Android autonome (recherche, création de conversation, envoi/
+  réception en temps réel des deux côtés).
 
 ## Phase 4 — Messagerie temps réel
 - Table `messages` + Supabase Realtime (subscriptions).
