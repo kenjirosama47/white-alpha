@@ -34,6 +34,18 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 - Recherche d'un utilisateur par pseudo.
 - Création d'une conversation privée entre deux utilisateurs (1-to-1 uniquement).
 - Liste des conversations de l'utilisateur connecté.
+- **Schéma distant (tables, RLS, RPC) — Terminé et vérifié.** Migration
+  `20260715104100_create_conversations_and_messages.sql` poussée sur le projet
+  distant : tables `conversations`/`messages`, policies RLS (accès réservé aux
+  participants), fonctions `search_public_profiles` et
+  `get_or_create_direct_conversation` (SECURITY DEFINER, exécution réservée à
+  `authenticated`), `messages` ajoutée à la publication `supabase_realtime`.
+  14 tests pgTAP locaux passent ; vérification post-push sur le projet distant
+  confirmée (tables, RLS actif, policies, GRANT `authenticated` corrects,
+  `anon` sans accès effectif malgré les GRANT larges par défaut de Supabase
+  Cloud, fonctions RPC rejetant tout appel non authentifié).
+- Interface mobile (recherche, création de conversation, liste) : non
+  commencée, en attente de validation utilisateur avant de démarrer.
 
 ## Phase 4 — Messagerie temps réel
 - Table `messages` + Supabase Realtime (subscriptions).
