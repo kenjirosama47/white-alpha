@@ -76,9 +76,10 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   **terminée**, 22 tests unitaires passent, `tsc`/`lint`/`expo-doctor` au vert.
 - Dépendances Expo réalignées sur SDK 57 (`expo install --fix`, versions
   patch uniquement) : `expo-doctor` 20/20.
-- **Reste à faire : test manuel avec deux comptes réels** sur la version
-  Preview Android autonome (recherche, création de conversation, envoi/
-  réception en temps réel des deux côtés).
+- **Test manuel avec deux comptes réels — Terminé et validé** sur la version
+  Preview Android autonome : champ de saisie visible au-dessus du clavier,
+  bouton Envoyer accessible, message téléphone → Web, message Web → téléphone
+  en temps réel, conversation conservée après réouverture. Phase 3 close.
 
 ## Phase 4 — Messagerie temps réel
 - Table `messages` + Supabase Realtime (subscriptions).
