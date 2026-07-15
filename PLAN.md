@@ -40,12 +40,22 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   participants), fonctions `search_public_profiles` et
   `get_or_create_direct_conversation` (SECURITY DEFINER, exécution réservée à
   `authenticated`), `messages` ajoutée à la publication `supabase_realtime`.
-  14 tests pgTAP locaux passent ; vérification post-push sur le projet distant
-  confirmée (tables, RLS actif, policies, GRANT `authenticated` corrects,
-  `anon` sans accès effectif malgré les GRANT larges par défaut de Supabase
-  Cloud, fonctions RPC rejetant tout appel non authentifié).
-- Interface mobile (recherche, création de conversation, liste) : non
-  commencée, en attente de validation utilisateur avant de démarrer.
+- **Durcissement défense en profondeur — Terminé et vérifié.** Migration
+  `20260715125649_harden_conversations_messages_grants.sql` : `REVOKE ALL` sur
+  `conversations`/`messages` pour `anon` (zéro privilège de table, vérifié
+  sur le projet distant) ; `authenticated` réduit au strict nécessaire des
+  policies existantes (SELECT seul sur `conversations` ;
+  SELECT/INSERT/UPDATE/DELETE sur `messages`) ; aucune policy RLS modifiée.
+- **RPC `list_my_conversations` — Terminée et vérifiée.** Migration
+  `20260715130037_list_conversations_rpc.sql` : liste les conversations de
+  l'utilisateur courant avec le profil public de l'autre participant (id,
+  username, display_name, avatar_url — jamais d'email) et un aperçu du
+  dernier message, triée par activité récente. SECURITY DEFINER, `search_path`
+  explicite, réservée à `authenticated` (`EXECUTE` refusé à `anon`/`public`,
+  vérifié sur le projet distant), refuse tout appel non authentifié.
+  22 tests pgTAP locaux passent (14 + 8 pour cette RPC).
+- Interface mobile (recherche, création de conversation, liste, messagerie
+  texte) : en cours (voir ci-dessous).
 
 ## Phase 4 — Messagerie temps réel
 - Table `messages` + Supabase Realtime (subscriptions).
