@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
+import { MessageImage } from '@/components/message-image';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -9,10 +10,12 @@ import { formatTime } from '@/utils/datetime';
 type MessageBubbleProps = {
   message: Message;
   isOwnMessage: boolean;
+  onImagePress?: (url: string) => void;
 };
 
-export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
+export function MessageBubble({ message, isOwnMessage, onImagePress }: MessageBubbleProps) {
   const theme = useTheme();
+  const hasText = message.content.trim().length > 0;
 
   return (
     <View style={[styles.row, isOwnMessage ? styles.rowOwn : styles.rowReceived]}>
@@ -21,9 +24,19 @@ export function MessageBubble({ message, isOwnMessage }: MessageBubbleProps) {
           styles.bubble,
           isOwnMessage ? styles.bubbleOwn : { backgroundColor: theme.backgroundElement },
         ]}>
-        <ThemedText type="default" style={isOwnMessage ? styles.textOwn : undefined}>
-          {message.content}
-        </ThemedText>
+        {message.attachment && (
+          <MessageImage
+            storagePath={message.attachment.storagePath}
+            width={message.attachment.width}
+            height={message.attachment.height}
+            onPress={(url) => onImagePress?.(url)}
+          />
+        )}
+        {hasText && (
+          <ThemedText type="default" style={isOwnMessage ? styles.textOwn : undefined}>
+            {message.content}
+          </ThemedText>
+        )}
         <ThemedText
           type="small"
           themeColor={isOwnMessage ? undefined : 'textSecondary'}

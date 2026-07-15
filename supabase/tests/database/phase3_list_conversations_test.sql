@@ -42,11 +42,12 @@ select is(
 
 select public.get_or_create_direct_conversation('e0000000-0000-0000-0000-00000000000e');
 
-insert into public.messages (conversation_id, sender_id, content)
-values (
+-- Depuis la Phase 4A, l'INSERT direct sur messages est révoqué pour
+-- authenticated : la création passe exclusivement par la RPC
+-- create_text_message (voir migration 20260715140000).
+select public.create_text_message(
   (select c.id from public.conversations c
    where (c.user_a = 'd0000000-0000-0000-0000-00000000000d' or c.user_b = 'd0000000-0000-0000-0000-00000000000d')),
-  'd0000000-0000-0000-0000-00000000000d',
   'Salut B, ça va ?'
 );
 

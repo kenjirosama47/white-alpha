@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
-import { fetchMessages, MESSAGES_PAGE_SIZE, sendMessage as sendMessageService } from '@/services/messages';
+import { fetchMessageById, fetchMessages, MESSAGES_PAGE_SIZE, sendMessage as sendMessageService } from '@/services/messages';
 import type { Message } from '@/types/chat';
 
 type RealtimeMessageRow = {
@@ -91,16 +91,22 @@ export function useMessages(conversationId: string): UseMessagesResult {
           if (messagesRef.current.some((message) => message.id === row.id)) {
             return;
           }
-          setMessages((current) => [
-            ...current,
-            {
-              id: row.id,
-              conversationId: row.conversation_id,
-              senderId: row.sender_id,
-              content: row.content,
-              createdAt: row.created_at,
-            },
-          ]);
+          // La charge utile Realtime ne contient jamais la pièce jointe
+          // éventuelle (elle vit dans message_attachments, une autre table) :
+          // on recharge le message complet plutôt que de mapper `row`
+          // directement, pour que les messages photo s'affichent aussi bien
+          // côté expéditeur que côté destinataire.
+          fetchMessageById(row.id)
+            .then((message) => {
+              if (!message) return;
+              setMessages((current) => {
+                if (current.some((existing) => existing.id === message.id)) return current;
+                return [...current, message];
+              });
+            })
+            .catch(() => {
+              // Message ignoré : il réapparaîtra au prochain chargement/pagination.
+            });
         },
       )
       .subscribe();
@@ -133,8 +139,10 @@ export function useMessages(conversationId: string): UseMessagesResult {
       setIsSending(true);
       setSendError(null);
       try {
-        // sender_id vient exclusivement de la session courante, jamais de l'UI.
-        await sendMessageService(conversationId, session.user.id, content);
+        // sender_id vient exclusivement de auth.uid() côté serveur (RPC
+        // create_text_message) : session.user.id ne sert ici qu'à vérifier
+        // qu'un utilisateur est bien connecté avant d'appeler la RPC.
+        await sendMessageService(conversationId, content);
         return true;
       } catch (err) {
         setSendError(err instanceof Error ? err.message : 'Erreur inconnue.');

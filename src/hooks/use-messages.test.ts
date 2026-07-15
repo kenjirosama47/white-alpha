@@ -11,6 +11,7 @@ jest.mock('@/contexts/auth-context', () => ({
 jest.mock('@/services/messages', () => ({
   MESSAGES_PAGE_SIZE: 30,
   fetchMessages: jest.fn(),
+  fetchMessageById: jest.fn(),
   sendMessage: jest.fn(),
 }));
 

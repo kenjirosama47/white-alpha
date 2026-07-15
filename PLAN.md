@@ -30,7 +30,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 - Écran de profil utilisateur (lecture/édition) : reporté à une phase ultérieure,
   non bloquant pour la Phase 3.
 
-## Phase 3 — Recherche & conversations
+## Phase 3 — Recherche, conversations & messagerie temps réel
 - Recherche d'un utilisateur par pseudo.
 - Création d'une conversation privée entre deux utilisateurs (1-to-1 uniquement).
 - Liste des conversations de l'utilisateur connecté.
@@ -81,13 +81,44 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   bouton Envoyer accessible, message téléphone → Web, message Web → téléphone
   en temps réel, conversation conservée après réouverture. Phase 3 close.
 
-## Phase 4 — Messagerie temps réel
-- Table `messages` + Supabase Realtime (subscriptions).
-- Envoi/réception de messages texte en direct.
-- États de lecture/livraison de base.
+## Phase 4 — Photos et vidéos
 
-## Phase 5 — Médias (photos & vidéos)
-- Upload photos et vidéos enregistrées via Supabase Storage.
+### Phase 4A — Photos — Développée, migration distante appliquée
+- Bucket Supabase Storage privé `chat-media` (jamais public) — vérifié sur le
+  projet distant (`public = false`, limite 10 Mo, `image/jpeg`/`image/png`/
+  `image/webp`).
+- Modèle `message_type` (`text`/`image`) sur `public.messages` avec contrainte
+  de longueur conditionnelle au type. INSERT direct sur `messages` et sur
+  `message_attachments` révoqué pour `authenticated` : toute création passe
+  exclusivement par les RPC `SECURITY DEFINER` `create_text_message` et
+  `create_image_message` (search_path explicite, `EXECUTE` réservé à
+  `authenticated`, jamais `anon`/`public`) — vérifié sur le projet distant.
+- Table `public.message_attachments` (migration
+  `20260715140000_create_message_attachments.sql`, **poussée sur le projet
+  distant**) liée à `public.messages`/`public.conversations`, RLS stricte
+  (lecture réservée aux deux participants, suppression réservée à
+  l'expéditeur) — vérifiée sur le projet distant.
+- Politiques `storage.objects` avec chemin obligatoire
+  `conversation_id/uploader_id/uuid.extension`, aucune permission `anon`,
+  aucun usage de `service_role` côté application — vérifiées sur le projet
+  distant.
+- Upload Storage effectué avant l'appel RPC (non transactionnel avec la base) ;
+  seules les lignes `messages`/`message_attachments` sont atomiques côté
+  PostgreSQL ; suppression compensatoire du fichier Storage si la RPC échoue.
+- Sélection d'une photo depuis la bibliothèque (`expo-image-picker`, sans
+  permission caméra ni microphone), aperçu avant envoi, upload avec
+  vérification MIME/taille (max 10 Mo, jpeg/png/webp), affichage dans la
+  bulle de conversation (URL signée temporaire, jamais persistée en base —
+  vérifié : aucune colonne URL dans le schéma distant).
+- États de lecture/livraison de base : reporté à une phase ultérieure.
+- 48 tests pgTAP locaux passent (14 + 8 Phase 3 mis à jour pour la nouvelle
+  RPC + 26 Phase 4A), 74 tests unitaires Jest passent.
+- **Reste à faire : test manuel de l'envoi/réception de photos avec deux
+  comptes réels** sur la version Preview Android autonome (nouveau build
+  requis : `expo-image-picker` modifie les permissions natives).
+
+### Phase 4B — Vidéos enregistrées (non commencée)
+- Upload de vidéos déjà enregistrées via Supabase Storage.
 - Prévisualisation dans la conversation.
 - Compression/limites de taille côté client.
 

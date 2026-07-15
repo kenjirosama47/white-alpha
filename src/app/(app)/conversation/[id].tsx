@@ -11,12 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AttachmentComposerPreview } from '@/components/attachment-composer-preview';
+import { ImageViewerModal } from '@/components/image-viewer-modal';
 import { MessageBubble } from '@/components/message-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/hooks/use-theme';
+import { useMediaUpload } from '@/hooks/use-media-upload';
 import { useMessages } from '@/hooks/use-messages';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 
@@ -31,7 +34,16 @@ export default function ConversationScreen() {
   const { session } = useAuth();
   const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send } =
     useMessages(id);
+  const {
+    pickedImage,
+    isUploading: isSendingImage,
+    error: imageError,
+    pick: pickImage,
+    cancel: cancelImage,
+    send: sendImage,
+  } = useMediaUpload(id);
   const [draft, setDraft] = useState('');
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   // FlatList inverted : données du plus récent au plus ancien pour que la
   // vue reste naturellement collée en bas, sur le dernier message.
@@ -46,6 +58,12 @@ export default function ConversationScreen() {
     if (success) {
       setDraft('');
     }
+  }
+
+  // Sélectionner/annuler une photo ne touche jamais au brouillon texte : il
+  // reste disponible pour un envoi séparé, avant ou après la photo.
+  async function handleSendImage() {
+    await sendImage();
   }
 
   return (
@@ -98,7 +116,11 @@ export default function ConversationScreen() {
               keyExtractor={(item) => item.id}
               inverted
               renderItem={({ item }) => (
-                <MessageBubble message={item} isOwnMessage={item.senderId === session?.user.id} />
+                <MessageBubble
+                  message={item}
+                  isOwnMessage={item.senderId === session?.user.id}
+                  onImagePress={setViewerUrl}
+                />
               )}
               onEndReached={loadMore}
               onEndReachedThreshold={0.3}
@@ -121,6 +143,20 @@ export default function ConversationScreen() {
               {sendError}
             </ThemedText>
           )}
+          {imageError && !pickedImage && (
+            <ThemedText type="small" style={styles.error}>
+              {imageError}
+            </ThemedText>
+          )}
+          {pickedImage && (
+            <AttachmentComposerPreview
+              image={pickedImage}
+              isUploading={isSendingImage}
+              error={imageError}
+              onCancel={cancelImage}
+              onSend={handleSendImage}
+            />
+          )}
           <ThemedView
             style={[
               styles.inputRow,
@@ -128,6 +164,19 @@ export default function ConversationScreen() {
               // le clavier est fermé ; jamais en position absolute.
               { paddingBottom: Math.max(insets.bottom, Spacing.two) },
             ]}>
+            <Pressable
+              onPress={pickImage}
+              disabled={!!pickedImage || isSendingImage}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.photoButton,
+                { borderColor: theme.backgroundSelected },
+                (pressed || !!pickedImage || isSendingImage) && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Photo
+              </ThemedText>
+            </Pressable>
             <TextInput
               placeholder="Écrire un message..."
               placeholderTextColor={theme.textSecondary}
@@ -154,6 +203,7 @@ export default function ConversationScreen() {
           </ThemedView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <ImageViewerModal url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </ThemedView>
   );
 }
@@ -213,6 +263,13 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
+  },
+  photoButton: {
+    borderWidth: 1,
+    borderRadius: Spacing.three,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    justifyContent: 'center',
   },
   input: {
     flex: 1,

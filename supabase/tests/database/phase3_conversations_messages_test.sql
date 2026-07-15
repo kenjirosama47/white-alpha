@@ -69,12 +69,14 @@ select is(
 );
 
 -- 7. A peut envoyer un message dans sa conversation.
+--    Depuis la Phase 4A, l'INSERT direct sur messages est révoqué pour
+--    authenticated : la création passe exclusivement par la RPC
+--    create_text_message (voir migration 20260715140000).
 set local "request.jwt.claim.sub" = 'a0000000-0000-0000-0000-00000000000a';
 set local "request.jwt.claims" = '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}';
 
 select lives_ok(
-  $$ insert into public.messages (conversation_id, sender_id, content)
-     values ((select id from t_conv), 'a0000000-0000-0000-0000-00000000000a', 'Salut B !') $$,
+  $$ select public.create_text_message((select id from t_conv), 'Salut B !') $$,
   'A peut envoyer un message dans sa conversation'
 );
 
@@ -83,8 +85,7 @@ set local "request.jwt.claim.sub" = 'b0000000-0000-0000-0000-00000000000b';
 set local "request.jwt.claims" = '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}';
 
 select lives_ok(
-  $$ insert into public.messages (conversation_id, sender_id, content)
-     values ((select id from t_conv), 'b0000000-0000-0000-0000-00000000000b', 'Salut A !') $$,
+  $$ select public.create_text_message((select id from t_conv), 'Salut A !') $$,
   'B peut envoyer un message dans sa conversation'
 );
 
@@ -93,10 +94,8 @@ set local "request.jwt.claim.sub" = 'c0000000-0000-0000-0000-00000000000c';
 set local "request.jwt.claims" = '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.messages (conversation_id, sender_id, content)
-     values ((select id from t_conv), 'c0000000-0000-0000-0000-00000000000c', 'Je ne devrais pas pouvoir') $$,
-  '42501',
-  null,
+  $$ select public.create_text_message((select id from t_conv), 'Je ne devrais pas pouvoir') $$,
+  'Conversation introuvable.',
   'C ne peut pas envoyer de message dans une conversation dont il n''est pas membre'
 );
 
