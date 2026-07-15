@@ -22,7 +22,8 @@ type UseMessagesResult = {
   sendError: string | null;
   isSending: boolean;
   loadMore: () => void;
-  send: (content: string) => Promise<void>;
+  /** Retourne `true` si l'envoi a réussi, `false` sinon (le contenu doit alors être conservé par l'appelant). */
+  send: (content: string) => Promise<boolean>;
 };
 
 /**
@@ -127,15 +128,17 @@ export function useMessages(conversationId: string): UseMessagesResult {
 
   const send = useCallback(
     async (content: string) => {
-      if (isSendingRef.current || !session?.user.id) return;
+      if (isSendingRef.current || !session?.user.id) return false;
       isSendingRef.current = true;
       setIsSending(true);
       setSendError(null);
       try {
         // sender_id vient exclusivement de la session courante, jamais de l'UI.
         await sendMessageService(conversationId, session.user.id, content);
+        return true;
       } catch (err) {
         setSendError(err instanceof Error ? err.message : 'Erreur inconnue.');
+        return false;
       } finally {
         isSendingRef.current = false;
         setIsSending(false);

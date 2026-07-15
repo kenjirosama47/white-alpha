@@ -9,7 +9,7 @@ import {
   StyleSheet,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageBubble } from '@/components/message-bubble';
 import { ThemedText } from '@/components/themed-text';
@@ -27,6 +27,7 @@ export default function ConversationScreen() {
     otherDisplayName?: string;
   }>();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send } =
     useMessages(id);
@@ -39,12 +40,20 @@ export default function ConversationScreen() {
   async function handleSend() {
     const content = draft;
     if (!content.trim() || isSending) return;
-    setDraft('');
-    await send(content);
+    const success = await send(content);
+    // Le champ n'est vidé qu'après un envoi réussi : en cas d'erreur,
+    // l'utilisateur ne doit pas perdre ce qu'il a écrit.
+    if (success) {
+      setDraft('');
+    }
   }
 
   return (
     <ThemedView style={styles.container}>
+      {/* edges sans 'bottom' : l'inset bas (barre de navigation Android en
+          edge-to-edge) est géré explicitement sur la zone de rédaction
+          ci-dessous, pas ici, pour éviter un double espacement quand le
+          clavier est ouvert. */}
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ThemedView style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
@@ -58,50 +67,67 @@ export default function ConversationScreen() {
           <ThemedView style={styles.headerSpacer} />
         </ThemedView>
 
-        {isLoading ? (
-          <ThemedView style={styles.centered}>
-            <ActivityIndicator />
-          </ThemedView>
-        ) : error ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              {error}
-            </ThemedText>
-          </ThemedView>
-        ) : messages.length === 0 ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              Aucun message pour le moment. Écris le premier !
-            </ThemedText>
-          </ThemedView>
-        ) : (
-          <FlatList
-            data={invertedMessages}
-            keyExtractor={(item) => item.id}
-            inverted
-            renderItem={({ item }) => (
-              <MessageBubble message={item} isOwnMessage={item.senderId === session?.user.id} />
-            )}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.3}
-            ListFooterComponent={
-              isLoadingMore ? (
-                <ThemedView style={styles.loadingMore}>
-                  <ActivityIndicator size="small" />
-                </ThemedView>
-              ) : null
-            }
-            contentContainerStyle={styles.listContent}
-          />
-        )}
+        {/* L'en-tête reste au-dessus, hors du KeyboardAvoidingView, donc
+            jamais déplacé par le clavier. Seuls la liste et le composer se
+            partagent l'espace restant et remontent au-dessus du clavier.
+            keyboardVerticalOffset=0 : rien d'autre ne chevauche cette zone. */}
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoiding}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}>
+          {isLoading ? (
+            <ThemedView style={styles.centered}>
+              <ActivityIndicator />
+            </ThemedView>
+          ) : error ? (
+            <ThemedView style={styles.centered}>
+              <ThemedText themeColor="textSecondary" style={styles.centeredText}>
+                {error}
+              </ThemedText>
+            </ThemedView>
+          ) : messages.length === 0 ? (
+            <ThemedView style={styles.centered}>
+              <ThemedText themeColor="textSecondary" style={styles.centeredText}>
+                Aucun message pour le moment. Écris le premier !
+              </ThemedText>
+            </ThemedView>
+          ) : (
+            <FlatList
+              style={styles.messageList}
+              data={invertedMessages}
+              keyExtractor={(item) => item.id}
+              inverted
+              renderItem={({ item }) => (
+                <MessageBubble message={item} isOwnMessage={item.senderId === session?.user.id} />
+              )}
+              onEndReached={loadMore}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={
+                isLoadingMore ? (
+                  <ThemedView style={styles.loadingMore}>
+                    <ActivityIndicator size="small" />
+                  </ThemedView>
+                ) : null
+              }
+              // Liste inversée : paddingTop est le padding visuellement en
+              // bas (proche du composer), paddingBottom celui visuellement
+              // en haut (proche de l'en-tête).
+              contentContainerStyle={styles.listContent}
+            />
+          )}
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {sendError && (
             <ThemedText type="small" style={styles.error}>
               {sendError}
             </ThemedText>
           )}
-          <ThemedView style={styles.inputRow}>
+          <ThemedView
+            style={[
+              styles.inputRow,
+              // Espace la barre de navigation Android (edge-to-edge) quand
+              // le clavier est fermé ; jamais en position absolute.
+              { paddingBottom: Math.max(insets.bottom, Spacing.two) },
+            ]}>
             <TextInput
               placeholder="Écrire un message..."
               placeholderTextColor={theme.textSecondary}
@@ -110,6 +136,8 @@ export default function ConversationScreen() {
               multiline
               maxLength={MESSAGE_MAX_LENGTH}
               editable={!isSending}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
               style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
             />
             <Pressable
@@ -137,7 +165,6 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    gap: Spacing.two,
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     width: '100%',
@@ -148,6 +175,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
+    paddingBottom: Spacing.two,
   },
   headerTitle: {
     flex: 1,
@@ -155,6 +183,9 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 50,
+  },
+  keyboardAvoiding: {
+    flex: 1,
   },
   centered: {
     flex: 1,
@@ -165,8 +196,12 @@ const styles = StyleSheet.create({
   centeredText: {
     textAlign: 'center',
   },
+  messageList: {
+    flex: 1,
+  },
   listContent: {
-    paddingVertical: Spacing.two,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
   },
   loadingMore: {
     paddingVertical: Spacing.three,
@@ -177,7 +212,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingTop: Spacing.two,
   },
   input: {
     flex: 1,
