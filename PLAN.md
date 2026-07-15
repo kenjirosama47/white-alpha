@@ -177,11 +177,16 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   de test vers `kenjies47`, durée correctement enregistrée en base
   (entier, ms), lecture confirmée (contrôles natifs, plein écran).
   Compte de test et toutes ses données supprimés après validation.
-- **Reste à faire : test manuel réel sur Android** avec une vidéo choisie
-  sur le téléphone, entre deux comptes réels, sur la version Preview
-  autonome (`versionCode` 4, déjà compatible — le correctif de durée ne
-  concerne que la plateforme web, la durée native étant déjà en
-  millisecondes). Aucun nouveau build requis pour ce correctif.
+- **Validation manuelle Android — Terminée**, sur la version Preview
+  autonome (`versionCode` 4), avec deux comptes réels : sélection d'une
+  vraie vidéo MP4 depuis la bibliothèque du téléphone, upload reprenable
+  TUS, message + pièce jointe créés atomiquement, réception en temps réel
+  sur le second compte, lecture vidéo avec contrôles natifs, plein écran,
+  conservation après fermeture/réouverture de l'app, limites de taille et
+  de durée respectées. Confirmé en base : message vidéo réel de 6 055 996
+  octets (~5,8 Mo), durée 31 965 ms (~32 s), `storage_path` cohérent entre
+  Storage et `message_attachments`. Vidéo réelle conservée (aucune
+  suppression). Phase 4B close.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
