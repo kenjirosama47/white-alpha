@@ -84,7 +84,13 @@ describe('MessageVideo', () => {
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it('met le lecteur en pause au démontage (fermeture de l’écran)', async () => {
+  it("n'appelle jamais pause()/play() explicitement sur le lecteur au démontage : useVideoPlayer le libère déjà seul", async () => {
+    // `player.pause()` explicite ici serait exécuté APRÈS la libération
+    // automatique de useVideoPlayer (les cleanups s'exécutent dans l'ordre de
+    // déclaration des effets) : côté natif Android, cela revient à appeler
+    // une méthode sur un lecteur ExoPlayer déjà (ou en cours de) libéré, ce
+    // qui provoque un crash natif fermant complètement l'application — c'est
+    // exactement le bug corrigé en Phase 5.4 (suppression d'une vidéo).
     mockUrlState = { url: 'https://signed.example/clip.mp4', isLoading: false, error: null };
 
     const { unmount } = await render(
@@ -93,6 +99,35 @@ describe('MessageVideo', () => {
 
     await unmount();
 
-    expect(mockPause).toHaveBeenCalledTimes(1);
+    expect(mockPause).not.toHaveBeenCalled();
+  });
+
+  it('démonté pendant le chargement (tap lecture puis suppression avant la fin de replaceAsync) : ne joue jamais sur un lecteur déjà démonté', async () => {
+    mockUrlState = { url: 'https://signed.example/clip.mp4', isLoading: false, error: null };
+    let resolveReplace: () => void = () => {};
+    mockReplaceAsync.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveReplace = resolve;
+      }),
+    );
+
+    const { unmount } = await render(
+      <MessageVideo storagePath="conv-1/user-1/clip.mp4" width={1280} height={720} durationMs={15_000} />,
+    );
+
+    fireEvent.press(screen.getByText('▶'));
+    await waitFor(() => expect(mockReplaceAsync).toHaveBeenCalledTimes(1));
+
+    // Le message (et donc ce composant) est supprimé pendant que
+    // `replaceAsync` est encore en vol.
+    await unmount();
+
+    // `replaceAsync` finit par se résoudre après coup : `play()` ne doit
+    // jamais être appelé sur ce lecteur désormais démonté/libéré.
+    resolveReplace();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockPlay).not.toHaveBeenCalled();
   });
 });

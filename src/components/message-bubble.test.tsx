@@ -153,6 +153,38 @@ describe('MessageBubble — vidéo, menu ⋮ et suppression', () => {
     // par la confirmation) : pas de recouvrement des deux états à la fois.
     await screen.findByText('Supprimer ce message ?');
     expect(screen.queryAllByText('Supprimer')).toHaveLength(0);
+    // Le bouton ⋮ lui-même a aussi disparu : un seul point d'action à la fois.
+    expect(screen.queryByLabelText('Options du message vidéo')).toBeNull();
+  });
+
+  it('masque le bouton ⋮ pendant la suppression (« Suppression… »)', async () => {
+    await render(
+      <MessageBubble
+        message={videoMessage}
+        isOwnMessage
+        deletionState={{ status: 'deleting', error: null }}
+        onDelete={jest.fn()}
+        onRetryDelete={jest.fn()}
+      />,
+    );
+
+    await screen.findByText('Suppression…');
+    expect(screen.queryByLabelText('Options du message vidéo')).toBeNull();
+  });
+
+  it('masque le bouton ⋮ en état d’échec (Réessayer déjà proposé)', async () => {
+    await render(
+      <MessageBubble
+        message={videoMessage}
+        isOwnMessage
+        deletionState={{ status: 'error', error: 'Impossible de supprimer le fichier pour le moment.' }}
+        onDelete={jest.fn()}
+        onRetryDelete={jest.fn()}
+      />,
+    );
+
+    await screen.findByText('Réessayer');
+    expect(screen.queryByLabelText('Options du message vidéo')).toBeNull();
   });
 });
 

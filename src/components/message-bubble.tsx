@@ -35,6 +35,12 @@ export function MessageBubble({
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
 
   const isDeleting = deletionState?.status === 'deleting';
+  // Masqué dès qu'une suppression est en cours de confirmation, en cours, ou
+  // en échec (le bloc sous la bulle affiche alors déjà Confirmer/Suppression…/
+  // Réessayer) : évite deux affordances de suppression actives en même temps
+  // pour la même vidéo, et referme proprement le point d'entrée pendant que
+  // la bulle est sur le point d'être retirée de la liste.
+  const showVideoMenuButton = isOwnMessage && !confirming && !isDeleting && deletionState?.status !== 'error';
 
   function handleConfirm() {
     setConfirming(false);
@@ -70,7 +76,7 @@ export function MessageBubble({
                 height={message.attachment.height}
                 durationMs={message.attachment.durationMs}
               />
-              {isOwnMessage && (
+              {showVideoMenuButton && (
                 <View style={styles.videoMenuAnchor} pointerEvents="box-none">
                   {/* Point d'entrée dédié : le lien « Supprimer » sous la bulle
                       ne suffit pas pour une vidéo (le rendu natif Android de

@@ -1,6 +1,6 @@
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -36,19 +36,35 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
 
   const { status, error: playerError } = useEvent(player, 'statusChange', { status: player.status });
 
-  // Libère/pause explicitement à la fermeture de l'écran ou au démontage
-  // (en plus du nettoyage automatique de useVideoPlayer) : une vidéo ne doit
-  // jamais continuer à jouer hors écran.
+  // `useVideoPlayer` release déjà le lecteur automatiquement au démontage
+  // (voir sa documentation). Un appel explicite à `player.pause()` ici serait
+  // exécuté APRÈS ce nettoyage automatique (les cleanups s'exécutent dans
+  // l'ordre de déclaration des effets, et useVideoPlayer/useReleasingSharedObject
+  // est déclaré avant ce composant) : côté natif Android, `release()` planifie
+  // `player.release()` sur le lecteur ExoPlayer sous-jacent
+  // (VideoPlayer.kt#close, GlobalScope.launch(Dispatchers.Main)) ; appeler
+  // ensuite `.pause()` sur ce lecteur déjà (ou en cours de) libéré fait
+  // planter l'app (crash natif Android, jamais rattrapable côté JS) — c'est
+  // précisément ce qui provoquait la fermeture de White Alpha après une
+  // suppression de vidéo (Phase 5.4). Rien à faire ici : ne jamais appeler de
+  // méthode sur `player` depuis un cleanup, laisser useVideoPlayer gérer seul
+  // tout le cycle de vie du lecteur.
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      player.pause();
+      mountedRef.current = false;
     };
-  }, [player]);
+  }, []);
 
   async function handlePlayPress() {
     if (!url) return;
     setHasStarted(true);
     await player.replaceAsync(url);
+    // Le composant (donc le lecteur) peut avoir été démonté pendant cet
+    // await (ex. suppression du message pendant le chargement) : `player` ne
+    // doit alors plus être touché, pour la même raison que ci-dessus.
+    if (!mountedRef.current) return;
     player.play();
   }
 

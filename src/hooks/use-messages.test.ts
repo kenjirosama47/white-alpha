@@ -170,4 +170,73 @@ describe('useMessages', () => {
 
     expect(result.current.messages.map((message) => message.id)).toEqual(['m2']);
   });
+
+  it('removeMessageLocally sur le seul/dernier message de la conversation vide la liste sans erreur (Phase 5.4 : suppression vidéo)', async () => {
+    const onlyVideo: Message = {
+      id: 'm-video',
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: '',
+      createdAt: '2026-07-15T10:00:00Z',
+      attachment: {
+        id: 'att-1',
+        messageId: 'm-video',
+        conversationId: 'conv-1',
+        uploaderId: 'user-1',
+        mediaType: 'video',
+        storagePath: 'conv-1/user-1/clip.mp4',
+        mimeType: 'video/mp4',
+        sizeBytes: 2_000_000,
+        width: 1280,
+        height: 720,
+        durationMs: 15_000,
+        createdAt: '2026-07-15T10:00:00Z',
+      },
+    };
+    (fetchMessages as jest.Mock).mockResolvedValue([onlyVideo]);
+
+    const { result } = await renderHook(() => useMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    await act(async () => {
+      result.current.removeMessageLocally('m-video');
+    });
+
+    expect(result.current.messages).toEqual([]);
+  });
+
+  it('supprimer une vidéo parmi plusieurs ne retire que celle-ci (les autres vidéos restent intactes)', async () => {
+    const makeVideo = (id: string): Message => ({
+      id,
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      content: '',
+      createdAt: '2026-07-15T10:00:00Z',
+      attachment: {
+        id: `att-${id}`,
+        messageId: id,
+        conversationId: 'conv-1',
+        uploaderId: 'user-1',
+        mediaType: 'video',
+        storagePath: `conv-1/user-1/${id}.mp4`,
+        mimeType: 'video/mp4',
+        sizeBytes: 2_000_000,
+        width: 1280,
+        height: 720,
+        durationMs: 15_000,
+        createdAt: '2026-07-15T10:00:00Z',
+      },
+    });
+    const videos = [makeVideo('m-video-1'), makeVideo('m-video-2'), makeVideo('m-video-3')];
+    (fetchMessages as jest.Mock).mockResolvedValue(videos);
+
+    const { result } = await renderHook(() => useMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+
+    await act(async () => {
+      result.current.removeMessageLocally('m-video-2');
+    });
+
+    expect(result.current.messages.map((message) => message.id)).toEqual(['m-video-1', 'm-video-3']);
+  });
 });
