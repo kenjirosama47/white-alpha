@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
 
 import ProfileScreen from '@/app/(app)/profile';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
+}));
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.0.0', android: { versionCode: 10 } } },
 }));
 
 const mockSignOut = jest.fn();
@@ -99,12 +105,29 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('Se déconnecter')).toBeTruthy();
   });
 
+  it('le bouton Retour ramène vers Conversations (router.back)', async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+    fireEvent.press(screen.getByText('Retour'));
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
   it("n'expose jamais d'email d'un autre utilisateur : seule la propre adresse (session) apparaît, dans Paramètres", async () => {
     mockUseMyProfile.mockReturnValue(baseProfileState());
 
     await render(<ProfileScreen />);
 
     expect(screen.getByText('kenjiro@example.com')).toBeTruthy();
+  });
+
+  it("affiche la version et le numéro de build de l'app, tirés de la configuration Expo", async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+
+    expect(screen.getByText('1.0.0 — build 10')).toBeTruthy();
   });
 
   it('bascule vers le formulaire d’édition au tap sur « Modifier le profil »', async () => {

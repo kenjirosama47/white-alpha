@@ -125,7 +125,12 @@ function ProfileView({ profile, onEdit }: ProfileViewProps) {
             <ThemedText type="small" themeColor="textSecondary">
               Version
             </ThemedText>
-            <ThemedText type="small">{Constants.expoConfig.version}</ThemedText>
+            <ThemedText type="small">
+              {Constants.expoConfig.version}
+              {typeof Constants.expoConfig?.android?.versionCode === 'number'
+                ? ` — build ${Constants.expoConfig.android.versionCode}`
+                : ''}
+            </ThemedText>
           </ThemedView>
         )}
 

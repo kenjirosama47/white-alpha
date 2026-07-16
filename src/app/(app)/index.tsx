@@ -5,15 +5,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppEmptyState } from '@/components/app-empty-state';
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
+import { AvatarImage } from '@/components/avatar-image';
 import { ConversationListItem } from '@/components/conversation-list-item';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useConversations } from '@/hooks/use-conversations';
+import { useMyProfile } from '@/hooks/use-my-profile';
 import type { ConversationSummary } from '@/types/chat';
 
 export default function ConversationsScreen() {
   const { conversations, isLoading, isRefreshing, error, refresh } = useConversations();
+  const { profile: myProfile } = useMyProfile();
 
   function openConversation(conversation: ConversationSummary) {
     router.push({
@@ -32,10 +35,8 @@ export default function ConversationsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.header}>
           <ThemedText type="subtitle">Conversations</ThemedText>
-          <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityLabel="Profil">
-            <ThemedText type="link" themeColor="textSecondary">
-              Profil
-            </ThemedText>
+          <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityLabel="Ouvrir mon profil">
+            <AvatarImage avatarUrl={myProfile?.avatarUrl ?? null} displayName={myProfile?.displayName ?? '?'} size={36} />
           </Pressable>
         </ThemedView>
 
