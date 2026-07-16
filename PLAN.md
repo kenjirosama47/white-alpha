@@ -190,7 +190,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
 
 ## Phase 5 — Finalisation, fiabilité et identité White Alpha
 
-### Phase 5.4 — Suppression sécurisée des messages et médias — Développée, migration distante appliquée
+### Phase 5.4 — Suppression sécurisée des messages et médias — Terminée et validée
 - RPC `delete_own_message(p_message_id uuid)` (migration
   `20260716090000_delete_own_message.sql`, **poussée sur le projet distant**,
   `SECURITY DEFINER`, `search_path` explicite, `EXECUTE` réservé à
@@ -226,10 +226,33 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   sur le projet distant : aucun `INSERT`/`DELETE` excessif réactivé pour
   `anon`/`public`).
 - 85 tests pgTAP locaux passent (14 + 8 + 26 Phase 4A + 20 Phase 4B + 17
-  Phase 5.4), 149 tests unitaires Jest passent.
-- Tests manuels avec deux comptes réels (suppression d'un message texte, d'une
-  photo, d'une vidéo, refus côté destinataire, disparition en temps réel chez
-  l'autre participant) : **restant à faire**.
+  Phase 5.4), 166 tests unitaires Jest passent.
+- **Bug trouvé et corrigé lors du test manuel Android (versionCode 6)** :
+  suppression d'une vidéo entraînant la fermeture complète de l'application.
+  Cause confirmée par lecture du code natif d'`expo-video`
+  (`VideoPlayer.kt#close`) : un appel explicite à `player.pause()` dans l'effet
+  de nettoyage de `message-video.tsx` s'exécutait après la libération
+  automatique du lecteur par `useVideoPlayer` (les cleanups React s'exécutent
+  dans l'ordre de déclaration des effets, jamais l'inverse), soit un appel sur
+  un lecteur ExoPlayer déjà libéré côté natif — crash non rattrapable côté
+  JavaScript. Corrigé : plus aucun appel explicite à une méthode du lecteur
+  depuis un cleanup ; garde `mountedRef` supplémentaire empêchant `player.play()`
+  si le composant a été démonté pendant le chargement (`replaceAsync`) d'une
+  vidéo. Bouton ⋮ dédié également ajouté sur les vidéos envoyées par
+  l'utilisateur (le rendu natif Android de `VideoView`, via `SurfaceView` par
+  défaut, pouvait recouvrir le lien « Supprimer » sous la bulle — corrigé avec
+  `surfaceType="textureView"`). Revalidé sur Android versionCode 7.
+- **Test manuel avec deux comptes réels — Terminé et validé**, sur les
+  versions Preview Android autonomes (versionCode 6 puis 7 pour le correctif
+  ci-dessus) : suppression d'un message texte, d'une photo et d'une vidéo par
+  leur auteur (bouton ⋮ dédié pour la vidéo), confirmation avant suppression,
+  état « Suppression… », disparition de la bulle après succès, White Alpha et
+  la conversation restent ouvertes et utilisables, vidéo absente après
+  fermeture/réouverture de l'app, suppression impossible sur un message reçu
+  (aucune option affichée). Vérifié sur le projet distant après le test : le
+  message vidéo, sa pièce jointe et son fichier Storage n'existent plus,
+  aucun fichier orphelin dans `chat-media` (bucket entièrement vide et
+  toujours privé après ce test). Phase 5.4 close.
 
 ### Phase 5.3 — Reprise et nouvelle tentative des uploads — Développée
 - Objectif : après un échec d'upload photo/vidéo, permettre une nouvelle
