@@ -442,6 +442,77 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   tant que le risque `ON DELETE CASCADE` documenté ci-dessus n'est pas traité
   séparément.
 
+## Phase 5.S — Audit de sécurité interne de White Alpha
+
+Audit inspection-only mené sur l'authentification Supabase, le stockage local,
+les tables/RPC/RLS/GRANT, les buckets Storage, la configuration Android
+réellement produite (manifeste décompilé de l'APK versionCode 10), les
+permissions, les composants exportés, le statut debuggable, les sauvegardes
+Android, les communications réseau, les logs et la présence de secrets.
+Classement en Critique/Élevé/Moyen/Faible/Conforme, avec preuve exacte,
+scénario de risque et correction recommandée pour chaque constat. Découpage
+en six sous-phases (5.S1 à 5.S6). Aucune modification de fichier pendant
+l'audit lui-même.
+
+### Phase 5.S1 — Sessions et stockage sécurisé — Terminée et validée
+- Constat corrigé (Élevé, trouvé lors de l'audit) : jetons de session
+  persistés en clair via AsyncStorage sur Android (`src/lib/supabase.ts`),
+  combiné à `android:allowBackup="true"` par défaut — risque d'extraction des
+  jetons en cas d'accès physique/root, ou de fuite via une sauvegarde Android
+  automatique.
+- Nouveau module `src/lib/secure-session-storage.ts` : adaptateur
+  `SupportedStorage` pour Supabase Auth adossé à `expo-secure-store`
+  (Android Keystore / iOS Keychain) sur natif ; stockage web inchangé
+  (SecureStore jamais importé ni appelé côté web) ; aucun repli silencieux
+  vers un stockage non chiffré ; chaque échec est capturé, catégorisé
+  (jamais de contenu sensible journalisé) et propagé explicitement.
+- `storageKey` calculé explicitement (`sb-<ref>-auth-token`, identique au
+  défaut implicite de supabase-js) plutôt que laissé implicite, pour que la
+  migration locale s'appuie sur une clé déterministe. Aucune option
+  `lock`/`processLock` : confirmée dépréciée et sans effet dans
+  `@supabase/auth-js@2.110.5` (lu directement dans le SDK installé).
+- Taille réelle d'une session sérialisée mesurée (compte de test) : 2251
+  octets. `expo-secure-store` installé chiffre via AES
+  (`AESEncryptor.kt`), pas l'ancien schéma RSA limité à ~2048 octets :
+  **aucun découpage de valeur nécessaire**, confirmé par mesure et lecture du
+  code natif, pas par supposition.
+- Migration locale unique et versionnée (`<storageKey>-migrated-v1`) : lit
+  uniquement la clé Supabase connue (jamais de parcours global
+  d'AsyncStorage), vérifie la forme de la valeur avant migration, écrit dans
+  SecureStore puis relit pour confirmer l'écriture, supprime l'ancienne
+  valeur AsyncStorage uniquement après cette confirmation. Échec à n'importe
+  quelle étape → ancienne valeur conservée, aucun marqueur posé (nouvelle
+  tentative au démarrage suivant), aucun contenu sensible journalisé.
+- `auth-context.tsx` durci : migration exécutée avant le premier
+  `getSession()` ; session illisible/corrompue (échec de stockage, pas une
+  valeur invalide déjà absorbée par le SDK) → nettoyage local puis retour à
+  l'écran de connexion, jamais de boucle de démarrage ; `signOut` ne prétend
+  jamais qu'une déconnexion distante a réussi en cas d'échec réseau, mais
+  force un nettoyage local garanti (session vidée en mémoire) ; `signIn`/
+  `signUp`/`resendConfirmation` durcis contre toute exception inattendue.
+- `android.allowBackup: false` ajouté dans `app.json` — confirmé dans le
+  manifeste réel (`expo config --type introspect` et `--type public`).
+  `expo-secure-store` ne déclare aucune permission Android (manifeste du
+  module vide) : aucune nouvelle permission sensible introduite.
+- 35 tests unitaires Jest ajoutés (adaptateur, migration dans tous ses cas
+  d'échec, configuration plateforme du client, bootstrap et déconnexion du
+  contexte d'auth, `allowBackup` statique) ; 318 tests au total passent,
+  `tsc`/`lint`/`expo-doctor` au vert, export Android de production réussi.
+- `npm audit` : 11 signalements, un seul CVE réel sous-jacent (`uuid <
+  11.1.1`), provenant de `xcode` (manipulation de projets `.xcodeproj`, outil
+  de prebuild iOS) via `@expo/config-plugins`/`expo-splash-screen` — jamais
+  exécuté sur l'appareil de l'utilisateur final, jamais atteint côté Android.
+  Aucun correctif compatible avec le SDK 57 disponible en amont ; aucun
+  `npm audit fix --force` lancé.
+- **Test manuel — Terminé et validé**, sur la version Preview Android
+  autonome (versionCode 11), installée en mise à jour de versionCode 10 pour
+  exercer la migration réelle : session existante conservée immédiatement
+  après la mise à jour, conservée après fermeture complète de l'app, conservée
+  après redémarrage du téléphone, déconnexion réussie, aucune session
+  restaurée après déconnexion puis réouverture, reconnexion réussie,
+  conversations/messages/photos/vidéos/profil/avatar tous fonctionnels,
+  aucune boucle de chargement ni fermeture de l'app. Phase 5.S1 close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
