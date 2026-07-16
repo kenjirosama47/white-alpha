@@ -11,7 +11,7 @@ type AuthContextValue = {
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (email: string, password: string, username: string) => Promise<AuthResult>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<AuthResult>;
 };
 
@@ -71,7 +71,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { error: error ? translateAuthError(error.message) : null };
       },
       async signOut() {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut();
+        return { error: error ? 'Impossible de se déconnecter pour le moment. Réessaie.' : null };
       },
       async resendConfirmation(email) {
         const { error } = await supabase.auth.resend({

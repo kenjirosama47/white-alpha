@@ -335,6 +335,73 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   Realtime sans abonnement ni message en double, états chargement/vide/erreur
   cohérents, bouton « Réessayer » fonctionnel. Phase 5.2 close.
 
+### Phase 5.1 — Profil utilisateur et paramètres — Développée, migration distante appliquée, validation manuelle Android restant à effectuer
+- Écran unique `src/app/(app)/profile.tsx` (vue profil + édition + section
+  Paramètres, bascule locale, pas de route séparée) : avatar, nom affiché,
+  `@username`, bouton « Modifier le profil », section Paramètres
+  (Confidentialité, statut de connexion, version de l'app, « Se déconnecter »).
+  Accès depuis l'écran Conversations (lien « Profil » dans l'en-tête).
+- RPC `update_my_profile(username, display_name, avatar_path default null)`
+  (migration `20260716140000_profile_settings.sql`, **poussée sur le projet
+  distant et vérifiée** : `SECURITY DEFINER`, `search_path` explicite,
+  `EXECUTE` réservé à `authenticated`, refusé à `anon`/`public`, agit
+  exclusivement sur `auth.uid()` — aucun `user_id` libre accepté, ne renvoie
+  jamais d'email) : normalise le nom d'utilisateur en minuscules, valide
+  nom/username côté PostgreSQL (3-30 caractères pour le username, doit
+  commencer par une lettre/chiffre jamais un underscore ; 2-50 pour le nom
+  affiché), message français explicite si le nom d'utilisateur est déjà pris.
+  Contrainte `username_format` resserrée en conséquence (auparavant 3-24,
+  pouvait commencer par un underscore) ; `handle_new_user` (inscription) mis à
+  jour avec la même règle. Grants explicites ajoutés sur `public.profiles`
+  (SELECT+UPDATE pour `authenticated` uniquement, rien pour `anon`) —
+  auparavant implicites (privilèges larges par défaut de Supabase Cloud),
+  rendus explicites en défense en profondeur.
+- Bucket Storage `avatars` (public, 5 Mo max, `image/jpeg`/`png`/`webp`
+  uniquement, distinct de `chat-media`) : chemin obligatoire
+  `user_id/uuid.ext`, upload/suppression/lecture limités au propre dossier de
+  l'appelant (policies RLS testées et vérifiées vers/depuis un autre compte).
+  `public.profiles.avatar_url` stocke un **chemin** Storage (jamais une URL),
+  converti en URL publique côté client (`getAvatarPublicUrl`, appel local
+  sans réseau) dans les mappers de `services/profiles.ts` et
+  `services/conversations.ts` — chaque consommateur reçoit toujours une URL
+  prête à afficher. Choix du bucket public documenté et vérifié en conditions
+  réelles après le push (upload réel + récupération HTTP sans aucune
+  authentification via `/storage/v1/object/public/avatars/...`, statut 200) :
+  un avatar est déjà traité comme public par le schéma existant
+  (`search_public_profiles`/`list_my_conversations` le renvoient déjà à tout
+  utilisateur authentifié). « Public » ne veut pas dire « listable » : aucun
+  listing global (vérifié : `list` sur le bucket en anonyme renvoie `[]`).
+- **Bug trouvé et corrigé par les tests pgTAP avant tout push** : une policy
+  SELECT manquante sur le bucket `avatars` empêchait silencieusement (sans
+  erreur) la suppression de son propre avatar via la policy DELETE pourtant
+  correcte — comportement RLS Postgres constaté empiriquement, pas documenté
+  a priori. Policy SELECT ajoutée, strictement limitée au propre dossier de
+  l'appelant (ne permet toujours pas de voir les avatars des autres
+  utilisateurs, qui restent accessibles uniquement via l'URL publique).
+  Une colonne `id` ambiguë dans `update_my_profile` (conflit avec le paramètre
+  de sortie `RETURNS TABLE`) a également été corrigée.
+- Flux de remplacement d'avatar : sélection bibliothèque uniquement (jamais
+  caméra), recadrage carré natif, aperçu annulable avant envoi ; upload → RPC
+  → suppression de l'ancien avatar uniquement après succès complet (jamais
+  celui d'un autre compte) ; en cas d'échec de la RPC après un upload réussi,
+  suppression compensatoire du **nouveau** fichier uniquement.
+- Déconnexion : confirmation inline (cohérent avec le pattern déjà existant
+  de confirmation de suppression de message, pas d'`Alert.alert`), erreur
+  française si l'appel échoue, aucune suppression de conversation ni de
+  fichier.
+- **Suppression de compte toujours interdite** : risque documenté de
+  suppression en cascade des conversations partagées (`ON DELETE CASCADE`)
+  — hors périmètre de cette phase et de toute phase tant que ce risque n'est
+  pas traité séparément.
+- 30 tests pgTAP locaux passent pour cette phase (115 au total avec les
+  phases précédentes), 277 tests unitaires Jest passent (220 + 57 pour cette
+  phase), `tsc`/`lint`/`expo-doctor` au vert, `db lint --linked` sans erreur.
+- Migration `20260716140000_profile_settings.sql` **poussée et vérifiée sur
+  le projet distant** (`migration list --linked` synchronisé, toutes les
+  vérifications de sécurité de la RPC et des policies Storage revérifiées
+  directement sur le projet distant après le push).
+- **Validation manuelle Android restant à effectuer** (versionCode 9).
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`

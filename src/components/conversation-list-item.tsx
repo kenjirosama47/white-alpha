@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet } from 'react-native';
 
+import { AvatarImage } from '@/components/avatar-image';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -20,9 +21,7 @@ export function ConversationListItem({ conversation, onPress }: ConversationList
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}>
-      <ThemedView type="backgroundElement" style={styles.avatar}>
-        <ThemedText type="smallBold">{otherParticipant.displayName.charAt(0).toUpperCase()}</ThemedText>
-      </ThemedView>
+      <AvatarImage avatarUrl={otherParticipant.avatarUrl} displayName={otherParticipant.displayName} size={44} />
 
       <ThemedView style={styles.content}>
         <ThemedText type="smallBold" numberOfLines={1}>
@@ -52,13 +51,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

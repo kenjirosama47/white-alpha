@@ -36,6 +36,7 @@ export default function SearchScreen() {
           id: conversationId,
           otherUsername: profile.username,
           otherDisplayName: profile.displayName,
+          otherAvatarUrl: profile.avatarUrl ?? '',
         },
       });
     } catch (err) {

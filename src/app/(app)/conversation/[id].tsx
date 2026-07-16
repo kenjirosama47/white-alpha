@@ -7,6 +7,7 @@ import { AppEmptyState } from '@/components/app-empty-state';
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { AttachmentComposerPreview } from '@/components/attachment-composer-preview';
+import { AvatarImage } from '@/components/avatar-image';
 import { ImageViewerModal } from '@/components/image-viewer-modal';
 import { MessageBubble } from '@/components/message-bubble';
 import { ThemedText } from '@/components/themed-text';
@@ -20,10 +21,11 @@ import { useMessages } from '@/hooks/use-messages';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 
 export default function ConversationScreen() {
-  const { id, otherDisplayName } = useLocalSearchParams<{
+  const { id, otherDisplayName, otherAvatarUrl } = useLocalSearchParams<{
     id: string;
     otherUsername?: string;
     otherDisplayName?: string;
+    otherAvatarUrl?: string;
   }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -93,9 +95,12 @@ export default function ConversationScreen() {
               Retour
             </ThemedText>
           </Pressable>
-          <ThemedText type="smallBold" numberOfLines={1} style={styles.headerTitle}>
-            {otherDisplayName ?? 'Discussion'}
-          </ThemedText>
+          <ThemedView style={styles.headerIdentity}>
+            <AvatarImage avatarUrl={otherAvatarUrl || null} displayName={otherDisplayName ?? '?'} size={32} />
+            <ThemedText type="smallBold" numberOfLines={1} style={styles.headerTitle}>
+              {otherDisplayName ?? 'Discussion'}
+            </ThemedText>
+          </ThemedView>
           <ThemedView style={styles.headerSpacer} />
         </ThemedView>
 
@@ -254,8 +259,15 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
   },
-  headerTitle: {
+  headerIdentity: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  headerTitle: {
+    flexShrink: 1,
     textAlign: 'center',
   },
   headerSpacer: {

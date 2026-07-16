@@ -9,12 +9,10 @@ import { ConversationListItem } from '@/components/conversation-list-item';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth-context';
 import { useConversations } from '@/hooks/use-conversations';
 import type { ConversationSummary } from '@/types/chat';
 
 export default function ConversationsScreen() {
-  const { signOut } = useAuth();
   const { conversations, isLoading, isRefreshing, error, refresh } = useConversations();
 
   function openConversation(conversation: ConversationSummary) {
@@ -24,6 +22,7 @@ export default function ConversationsScreen() {
         id: conversation.conversationId,
         otherUsername: conversation.otherParticipant.username,
         otherDisplayName: conversation.otherParticipant.displayName,
+        otherAvatarUrl: conversation.otherParticipant.avatarUrl ?? '',
       },
     });
   }
@@ -33,9 +32,9 @@ export default function ConversationsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.header}>
           <ThemedText type="subtitle">Conversations</ThemedText>
-          <Pressable onPress={signOut} hitSlop={8}>
+          <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityLabel="Profil">
             <ThemedText type="link" themeColor="textSecondary">
-              Déconnexion
+              Profil
             </ThemedText>
           </Pressable>
         </ThemedView>

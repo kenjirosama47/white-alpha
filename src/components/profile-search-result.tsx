@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet } from 'react-native';
 
+import { AvatarImage } from '@/components/avatar-image';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -17,9 +18,7 @@ export function ProfileSearchResult({ profile, onPress, disabled }: ProfileSearc
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [styles.container, (pressed || disabled) && styles.pressed]}>
-      <ThemedView type="backgroundElement" style={styles.avatar}>
-        <ThemedText type="smallBold">{profile.displayName.charAt(0).toUpperCase()}</ThemedText>
-      </ThemedView>
+      <AvatarImage avatarUrl={profile.avatarUrl} displayName={profile.displayName} size={44} />
 
       <ThemedView style={styles.content}>
         <ThemedText type="smallBold" numberOfLines={1}>
@@ -43,13 +42,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   content: {
     flex: 1,

@@ -7,6 +7,7 @@ export default function AppLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="search" />
+      <Stack.Screen name="profile" />
       <Stack.Screen name="conversation/[id]" />
     </Stack>
   );

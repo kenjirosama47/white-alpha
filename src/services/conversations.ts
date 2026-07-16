@@ -1,3 +1,4 @@
+import { getAvatarPublicUrl } from '@/services/avatars';
 import { supabase } from '@/lib/supabase';
 import type { ConversationSummary } from '@/types/chat';
 import { friendlyRpcError } from '@/utils/errors';
@@ -7,6 +8,7 @@ type ListConversationsRow = {
   other_user_id: string;
   other_username: string;
   other_display_name: string;
+  /** Chemin Storage dans le bucket `avatars` (jamais une URL complète) — voir migration 20260716140000. */
   other_avatar_url: string | null;
   last_message_content: string | null;
   last_message_created_at: string | null;
@@ -19,7 +21,7 @@ function mapConversationRow(row: ListConversationsRow): ConversationSummary {
       id: row.other_user_id,
       username: row.other_username,
       displayName: row.other_display_name,
-      avatarUrl: row.other_avatar_url,
+      avatarUrl: row.other_avatar_url ? getAvatarPublicUrl(row.other_avatar_url) : null,
     },
     lastMessageContent: row.last_message_content,
     lastMessageCreatedAt: row.last_message_created_at,

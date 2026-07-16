@@ -2,10 +2,17 @@ import { supabase } from '@/lib/supabase';
 import { getOrCreateConversation, listConversations } from '@/services/conversations';
 
 jest.mock('@/lib/supabase', () => ({
-  supabase: { rpc: jest.fn() },
+  supabase: { rpc: jest.fn(), storage: { from: jest.fn() } },
 }));
 
 const mockRpc = supabase.rpc as jest.Mock;
+const mockStorageFrom = supabase.storage.from as jest.Mock;
+
+beforeEach(() => {
+  mockStorageFrom.mockReturnValue({
+    getPublicUrl: (path: string) => ({ data: { publicUrl: `https://cdn.test/avatars/${path}` } }),
+  });
+});
 
 describe('getOrCreateConversation', () => {
   beforeEach(() => {
@@ -80,5 +87,27 @@ describe('listConversations', () => {
     const result = await listConversations();
 
     expect(result).toEqual([]);
+  });
+
+  it('convertit other_avatar_url (chemin Storage) en URL publique prête à afficher', async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          conversation_id: 'c1',
+          other_user_id: 'u2',
+          other_username: 'bob',
+          other_display_name: 'Bob',
+          other_avatar_url: 'u2/abc.jpg',
+          last_message_content: 'Salut',
+          last_message_created_at: '2026-07-15T10:00:00Z',
+        },
+      ],
+      error: null,
+    });
+
+    const result = await listConversations();
+
+    expect(mockStorageFrom).toHaveBeenCalledWith('avatars');
+    expect(result[0].otherParticipant.avatarUrl).toBe('https://cdn.test/avatars/u2/abc.jpg');
   });
 });
