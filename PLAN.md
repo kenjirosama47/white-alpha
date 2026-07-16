@@ -290,7 +290,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   cohérentes ; aucun doublon ni fichier orphelin issus de la tentative
   interrompue ; bucket `chat-media` toujours privé. Phase 5.3 close.
 
-### Phase 5.2 — États chargement, vide, erreur et connexion réseau cohérents — Développée
+### Phase 5.2 — États chargement, vide, erreur et connexion réseau cohérents — Terminée et validée
 - Objectif : uniformiser les états (chargement, liste vide, erreur récupérable,
   absence de connexion, reconnexion, nouvelle tentative) sur les écrans
   Conversations, Recherche et Discussion, sans toucher à la logique métier de
@@ -327,7 +327,13 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   par test : un seul canal/abonnement créé, aucun doublon après reconnexion.
 - 220 tests unitaires Jest passent (166 + 54 pour cette phase), `tsc`/`lint`/
   `expo-doctor` au vert.
-- Test manuel Android (versionCode 8) : **restant à faire**.
+- **Test manuel — Terminé et validé**, sur la version Preview Android
+  autonome (versionCode 8) : bandeau « Aucune connexion Internet » pendant
+  une coupure, conversations et messages déjà chargés conservés, erreur en
+  français lors d'une opération tentée hors connexion, White Alpha reste
+  ouverte, bandeau « Connexion rétablie » au retour du réseau, reconnexion
+  Realtime sans abonnement ni message en double, états chargement/vide/erreur
+  cohérents, bouton « Réessayer » fonctionnel. Phase 5.2 close.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
