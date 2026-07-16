@@ -16,8 +16,8 @@ describe('app.json — configuration Android', () => {
     expect(appJson.expo.android.package).toBe('com.kenjiro.whitealpha');
   });
 
-  it('le versionCode reflète la dernière validation Android (Phase 5.S1)', () => {
-    expect(appJson.expo.android.versionCode).toBe(11);
+  it('le versionCode reflète le build en attente de validation Android (Phase 5.S2)', () => {
+    expect(appJson.expo.android.versionCode).toBe(12);
   });
 
   it('bloque les permissions non nécessaires introduites par expo-screen-capture (détection uniquement, non utilisée)', () => {
