@@ -12,8 +12,17 @@ describe('app.json — configuration Android', () => {
     expect(appJson.expo.plugins).toContain('expo-secure-store');
   });
 
-  it('le package et le versionCode restent inchangés par cette sous-phase', () => {
+  it('le package reste inchangé', () => {
     expect(appJson.expo.android.package).toBe('com.kenjiro.whitealpha');
-    expect(appJson.expo.android.versionCode).toBe(10);
+  });
+
+  it('le versionCode reflète la dernière validation Android (Phase 5.S1)', () => {
+    expect(appJson.expo.android.versionCode).toBe(11);
+  });
+
+  it('bloque les permissions non nécessaires introduites par expo-screen-capture (détection uniquement, non utilisée)', () => {
+    expect(appJson.expo.android.blockedPermissions).toEqual(
+      expect.arrayContaining(['android.permission.READ_MEDIA_IMAGES', 'android.permission.DETECT_SCREEN_CAPTURE']),
+    );
   });
 });

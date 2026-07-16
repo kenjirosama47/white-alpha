@@ -1,6 +1,8 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { useEffect } from 'react';
+import * as ScreenCapture from 'expo-screen-capture';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { OfflineBanner } from '@/components/offline-banner';
@@ -8,8 +10,32 @@ import { AuthProvider, useAuth } from '@/contexts/auth-context';
 
 SplashScreen.preventAutoHideAsync();
 
+// Clé stable et explicite pour éviter tout conflit entre appels
+// prevent/allowScreenCaptureAsync (recommandé par la doc expo-screen-capture).
+export const SCREEN_CAPTURE_KEY = 'white-alpha-private-screens';
+
+// Sécurisé par défaut dès le chargement du module, avant même le premier
+// rendu : FLAG_SECURE (Android) est actif par défaut, y compris pendant
+// l'écran de démarrage/chargement de session qui peut déjà contenir des
+// éléments d'interface issus d'une session restaurée. Seul l'écran public
+// (auth) le désactive explicitement une fois confirmé non authentifié.
+// Web n'a pas d'implémentation native : l'appeler y lève une
+// UnavailabilityError, donc on ne l'appelle jamais sur cette plateforme.
+if (Platform.OS !== 'web') {
+  ScreenCapture.preventScreenCaptureAsync(SCREEN_CAPTURE_KEY);
+}
+
 function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!isLoading && !isAuthenticated) {
+      ScreenCapture.allowScreenCaptureAsync(SCREEN_CAPTURE_KEY);
+    } else {
+      ScreenCapture.preventScreenCaptureAsync(SCREEN_CAPTURE_KEY);
+    }
+  }, [isAuthenticated, isLoading]);
 
   // Tant que la session n'a pas été restaurée, le splash natif reste affiché
   // (voir AnimatedSplashOverlay) : la Stack ci-dessous ne devient visible
