@@ -1,7 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { AUTH_CALLBACK_URL, supabase } from '@/lib/supabase';
+import { clearStoredSession, logAuthStorageEvent, migrateLegacySessionToSecureStore } from '@/lib/secure-session-storage';
+import { AUTH_CALLBACK_URL, SESSION_STORAGE_KEY, supabase } from '@/lib/supabase';
 
 type AuthResult = { error: string | null };
 
@@ -36,21 +37,50 @@ function translateAuthError(message: string): string {
   return 'Une erreur est survenue. Réessaie.';
 }
 
+/** Erreur générique unique pour toute défaillance inattendue (réseau, stockage) — jamais le détail interne Supabase ni un jeton. */
+const UNEXPECTED_ERROR_MESSAGE = 'Une erreur est survenue. Réessaie.';
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsLoading(false);
-    });
+    let isMounted = true;
+
+    async function bootstrap() {
+      // Migration unique (natif uniquement, no-op sur web) : doit se
+      // terminer avant le premier getSession(), sinon une session valide
+      // laissée dans l'ancien AsyncStorage semblerait absente.
+      await migrateLegacySessionToSecureStore(SESSION_STORAGE_KEY);
+
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setSession(data.session);
+        logAuthStorageEvent(data.session ? 'Lecture de session réussie.' : 'Session absente.');
+      } catch {
+        // Session illisible/corrompue (échec de stockage, pas juste une
+        // valeur invalide déjà gérée par le SDK) : jamais de boucle de
+        // démarrage bloquée dessus — nettoyage local puis écran de connexion.
+        if (!isMounted) return;
+        await clearStoredSession(SESSION_STORAGE_KEY);
+        setSession(null);
+        logAuthStorageEvent('Session invalide, nettoyage local effectué.');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+
+    bootstrap();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -59,28 +89,60 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAuthenticated: !!session,
       isLoading,
       async signIn(email, password) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error ? translateAuthError(error.message) : null };
+        try {
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          return { error: error ? translateAuthError(error.message) : null };
+        } catch {
+          logAuthStorageEvent('Connexion échouée (réseau ou stockage).');
+          return { error: UNEXPECTED_ERROR_MESSAGE };
+        }
       },
       async signUp(email, password, username) {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { username }, emailRedirectTo: AUTH_CALLBACK_URL },
-        });
-        return { error: error ? translateAuthError(error.message) : null };
+        try {
+          const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { username }, emailRedirectTo: AUTH_CALLBACK_URL },
+          });
+          return { error: error ? translateAuthError(error.message) : null };
+        } catch {
+          logAuthStorageEvent('Inscription échouée (réseau ou stockage).');
+          return { error: UNEXPECTED_ERROR_MESSAGE };
+        }
       },
       async signOut() {
-        const { error } = await supabase.auth.signOut();
-        return { error: error ? 'Impossible de se déconnecter pour le moment. Réessaie.' : null };
+        try {
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            logAuthStorageEvent('Déconnexion échouée (réponse du serveur).');
+            return { error: 'Impossible de se déconnecter pour le moment. Réessaie.' };
+          }
+          setSession(null);
+          logAuthStorageEvent('Déconnexion réussie.');
+          return { error: null };
+        } catch {
+          // Échec réseau ou de stockage pendant la déconnexion : on ne
+          // prétend jamais que la déconnexion distante a réussi, mais on
+          // force un nettoyage local pour ne jamais laisser une session
+          // utilisable sur cet appareil (voir Phase 5.S1, section 8).
+          await clearStoredSession(SESSION_STORAGE_KEY);
+          setSession(null);
+          logAuthStorageEvent('Déconnexion échouée (réseau ou stockage), nettoyage local effectué.');
+          return { error: 'Impossible de se déconnecter pour le moment. Réessaie.' };
+        }
       },
       async resendConfirmation(email) {
-        const { error } = await supabase.auth.resend({
-          type: 'signup',
-          email,
-          options: { emailRedirectTo: AUTH_CALLBACK_URL },
-        });
-        return { error: error ? translateAuthError(error.message) : null };
+        try {
+          const { error } = await supabase.auth.resend({
+            type: 'signup',
+            email,
+            options: { emailRedirectTo: AUTH_CALLBACK_URL },
+          });
+          return { error: error ? translateAuthError(error.message) : null };
+        } catch {
+          logAuthStorageEvent('Renvoi de confirmation échoué (réseau ou stockage).');
+          return { error: UNEXPECTED_ERROR_MESSAGE };
+        }
       },
     }),
     [session, isLoading],
