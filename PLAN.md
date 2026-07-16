@@ -254,7 +254,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   aucun fichier orphelin dans `chat-media` (bucket entièrement vide et
   toujours privé après ce test). Phase 5.4 close.
 
-### Phase 5.3 — Reprise et nouvelle tentative des uploads — Développée
+### Phase 5.3 — Reprise et nouvelle tentative des uploads — Terminée et validée
 - Objectif : après un échec d'upload photo/vidéo, permettre une nouvelle
   tentative sans re-sélectionner le fichier, dans la même session.
 - Vidéos (TUS) : `uploadVideoResumable` expose désormais `retry()`, qui
@@ -275,9 +275,20 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   « Envoyer » quand une erreur est affichée), barre de progression vidéo
   conservée après un échec reprenable (ne repart pas de 0 à la reprise).
 - Limitation MVP inchangée (documentée en Phase 4B) : aucune reprise après un
-  redémarrage complet de l'application (pas de persistance `urlStorage`).
-- Tests manuels avec deux comptes réels (coupure réseau puis reprise,
-  annulation, double tentative) : **restant à faire**.
+  redémarrage complet de l'application (pas de persistance `urlStorage`) —
+  la reprise n'est validée que **pendant la même session** (app restée
+  ouverte, y compris pendant la coupure réseau elle-même). Toujours hors
+  périmètre du MVP.
+- **Test manuel — Terminé et validé**, sur la version Preview Android
+  autonome (versionCode 7) : coupure réseau pendant l'upload d'une vidéo,
+  message d'erreur en français, aperçu et texte du champ conservés, bouton
+  « Réessayer » affiché, annulation disponible, reprise après retour du
+  réseau (même session), envoi final réussi, White Alpha reste ouverte.
+  Vérifié sur le projet distant après le test : exactement un objet Storage,
+  un message vidéo et un `message_attachment` pour cet envoi, `storage_path`
+  identique entre Storage et la base, MIME `video/mp4`, taille et durée
+  cohérentes ; aucun doublon ni fichier orphelin issus de la tentative
+  interrompue ; bucket `chat-media` toujours privé. Phase 5.3 close.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
