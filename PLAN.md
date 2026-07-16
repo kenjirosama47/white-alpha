@@ -400,7 +400,30 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   le projet distant** (`migration list --linked` synchronisé, toutes les
   vérifications de sécurité de la RPC et des policies Storage revérifiées
   directement sur le projet distant après le push).
-- **Validation manuelle Android restant à effectuer** (versionCode 9).
+- **Bug trouvé lors de la première validation manuelle (versionCode 9)** : l'en-tête
+  de l'écran Conversations n'affichait qu'un lien texte « Profil », sans avatar ni
+  `accessibilityLabel` dédié. Corrigé : bouton affichant l'avatar de l'utilisateur
+  connecté (ou son initiale à défaut), `accessibilityLabel="Ouvrir mon profil"`,
+  navigation vers `/profile` au toucher ; la déconnexion reste exclusivement dans
+  l'écran Profil, jamais dans l'en-tête Conversations. Un test structurel
+  (`src/app/(app)/_layout.test.tsx`) vérifie que `/profile` est déclaré dans le même
+  groupe Stack protégé (`Stack.Protected guard={isAuthenticated}` du layout racine)
+  que les autres écrans authentifiés — aucune redirection dupliquée par écran.
+- Écran Profil : ligne discrète « Version X.Y.Z — build N » ajoutée dans Paramètres,
+  valeurs tirées de `Constants.expoConfig` (`expo-constants`, déjà une dépendance
+  existante, aucune nouvelle dépendance).
+- 283 tests unitaires Jest passent (277 + 6 pour ce correctif), `tsc`/`lint`/
+  `expo-doctor` au vert.
+- **Test manuel — Terminé et validé**, sur la version Preview Android autonome
+  (versionCode 9 puis 10 pour le correctif d'accès au profil ci-dessus) : écran
+  Profil accessible depuis l'en-tête Conversations, modification du nom affiché,
+  modification du nom d'utilisateur, validation des saisies, sélection et upload de
+  l'avatar, avatar conservé après réouverture de l'app, avatar visible depuis un
+  autre compte, remplacement de l'avatar, déconnexion et reconnexion, aucune adresse
+  email publique, White Alpha reste ouverte. Phase 5.1 close.
+- **Suppression de compte reste hors périmètre** de toute phase actuelle ou future
+  tant que le risque `ON DELETE CASCADE` documenté ci-dessus n'est pas traité
+  séparément.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
