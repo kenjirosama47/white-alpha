@@ -335,7 +335,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   Realtime sans abonnement ni message en double, états chargement/vide/erreur
   cohérents, bouton « Réessayer » fonctionnel. Phase 5.2 close.
 
-### Phase 5.1 — Profil utilisateur et paramètres — Développée, migration distante appliquée, validation manuelle Android restant à effectuer
+### Phase 5.1 — Profil utilisateur et paramètres — Terminée et validée
 - Écran unique `src/app/(app)/profile.tsx` (vue profil + édition + section
   Paramètres, bascule locale, pas de route séparée) : avatar, nom affiché,
   `@username`, bouton « Modifier le profil », section Paramètres
@@ -406,7 +406,7 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   connecté (ou son initiale à défaut), `accessibilityLabel="Ouvrir mon profil"`,
   navigation vers `/profile` au toucher ; la déconnexion reste exclusivement dans
   l'écran Profil, jamais dans l'en-tête Conversations. Un test structurel
-  (`src/app/(app)/_layout.test.tsx`) vérifie que `/profile` est déclaré dans le même
+  (`src/screens/app-layout.test.tsx`) vérifie que `/profile` est déclaré dans le même
   groupe Stack protégé (`Stack.Protected guard={isAuthenticated}` du layout racine)
   que les autres écrans authentifiés — aucune redirection dupliquée par écran.
 - Écran Profil : ligne discrète « Version X.Y.Z — build N » ajoutée dans Paramètres,
@@ -414,13 +414,30 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   existante, aucune nouvelle dépendance).
 - 283 tests unitaires Jest passent (277 + 6 pour ce correctif), `tsc`/`lint`/
   `expo-doctor` au vert.
+- **Build Android versionCode 10 : premier échec trouvé et corrigé.** Le test
+  structurel `_layout.test.tsx` avait été créé à l'intérieur de `src/app`, dossier
+  scanné par Expo Router via `require.context` pour construire toutes les routes de
+  l'app. Metro a donc tenté de bundler ce fichier de test comme s'il faisait partie
+  de l'app réelle, entraînant l'import de `@testing-library/react-native` (outil de
+  test, jamais destiné au bundle de production) → sa chaîne interne importe le
+  module Node `console`, non résolvable par Metro pour la cible Android
+  (`Error: Unable to resolve module console`, phase `EAGER_BUNDLE`). Cause confirmée
+  par lecture des logs EAS complets et reproduite localement via
+  `npx expo export --platform android`. Corrigé en déplaçant le fichier vers
+  `src/screens/app-layout.test.tsx` (même contenu, seul l'emplacement change) —
+  aucun autre test de ce projet ne vit à l'intérieur de `src/app`, précisément pour
+  cette raison. Un second build versionCode 10 a ensuite réussi.
 - **Test manuel — Terminé et validé**, sur la version Preview Android autonome
-  (versionCode 9 puis 10 pour le correctif d'accès au profil ci-dessus) : écran
-  Profil accessible depuis l'en-tête Conversations, modification du nom affiché,
-  modification du nom d'utilisateur, validation des saisies, sélection et upload de
-  l'avatar, avatar conservé après réouverture de l'app, avatar visible depuis un
-  autre compte, remplacement de l'avatar, déconnexion et reconnexion, aucune adresse
-  email publique, White Alpha reste ouverte. Phase 5.1 close.
+  (versionCode 9 puis 10 après le correctif d'accès au profil et le correctif de
+  build ci-dessus) : avatar ou initiale visible dans l'en-tête Conversations,
+  navigation vers Profil, absence de « Déconnexion » dans l'en-tête Conversations,
+  « Se déconnecter » disponible uniquement dans Profil, ligne « Version 1.0.0 —
+  build 10 » affichée dans Paramètres, modification du nom affiché, modification du
+  nom d'utilisateur, validation des saisies, sélection et upload de l'avatar, avatar
+  conservé après réouverture de l'app, avatar visible depuis un autre compte,
+  remplacement de l'avatar, retour vers Conversations, déconnexion et reconnexion,
+  aucune adresse email publique, White Alpha reste ouverte, aucune fermeture ni
+  régression. Phase 5.1 close.
 - **Suppression de compte reste hors périmètre** de toute phase actuelle ou future
   tant que le risque `ON DELETE CASCADE` documenté ci-dessus n'est pas traité
   séparément.
