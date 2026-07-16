@@ -70,7 +70,11 @@ export function AttachmentComposerPreview({
                 <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <ThemedText type="smallBold" style={styles.sendButtonLabel}>
-                  Envoyer
+                  {/* Un message d'erreur affiché signale une tentative précédente
+                      échouée : ce même bouton relance l'envoi (reprise pour une
+                      vidéo, nouveau chemin Storage pour une photo), sans jamais
+                      redemander le fichier. */}
+                  {error ? 'Réessayer' : 'Envoyer'}
                 </ThemedText>
               )}
             </Pressable>
@@ -84,7 +88,10 @@ export function AttachmentComposerPreview({
           </View>
         </View>
       </View>
-      {isUploading && media.kind === 'video' && uploadProgress != null && (
+      {/* Reste affichée après un échec reprenable (uploadProgress non réinitialisé
+          dans ce cas, voir use-media-upload.ts) : la reprise repartira visiblement
+          d'où l'envoi s'est arrêté, pas de 0. */}
+      {media.kind === 'video' && uploadProgress != null && (
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
         </View>

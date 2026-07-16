@@ -20,6 +20,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { useMediaUpload } from '@/hooks/use-media-upload';
+import { useMessageDeletion } from '@/hooks/use-message-deletion';
 import { useMessages } from '@/hooks/use-messages';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 
@@ -32,8 +33,9 @@ export default function ConversationScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
-  const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send } =
+  const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send, removeMessageLocally } =
     useMessages(id);
+  const { getDeletionState, deleteMessage, retryDeletion } = useMessageDeletion(removeMessageLocally);
   const {
     pickedMedia,
     isUploading: isUploadingMedia,
@@ -122,13 +124,19 @@ export default function ConversationScreen() {
               data={invertedMessages}
               keyExtractor={(item) => item.id}
               inverted
-              renderItem={({ item }) => (
-                <MessageBubble
-                  message={item}
-                  isOwnMessage={item.senderId === session?.user.id}
-                  onImagePress={setViewerUrl}
-                />
-              )}
+              renderItem={({ item }) => {
+                const isOwnMessage = item.senderId === session?.user.id;
+                return (
+                  <MessageBubble
+                    message={item}
+                    isOwnMessage={isOwnMessage}
+                    onImagePress={setViewerUrl}
+                    deletionState={isOwnMessage ? getDeletionState(item.id) : null}
+                    onDelete={() => deleteMessage(item)}
+                    onRetryDelete={() => retryDeletion(item)}
+                  />
+                );
+              }}
               onEndReached={loadMore}
               onEndReachedThreshold={0.3}
               ListFooterComponent={

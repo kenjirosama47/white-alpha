@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { deleteMessage, fetchMessageById, fetchMessages, sendImageMessage, sendMessage, sendVideoMessage } from '@/services/messages';
+import { deleteOwnMessage, fetchMessageById, fetchMessages, sendImageMessage, sendMessage, sendVideoMessage } from '@/services/messages';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 
 jest.mock('@/lib/supabase', () => ({
@@ -482,28 +482,68 @@ describe('fetchMessageById', () => {
   });
 });
 
-describe('deleteMessage', () => {
+describe('deleteOwnMessage', () => {
   beforeEach(() => {
-    mockFrom.mockReset();
+    mockRpc.mockReset();
   });
 
-  it('supprime le message par son id', async () => {
-    const eq = jest.fn().mockResolvedValue({ error: null });
-    const del = jest.fn().mockReturnValue({ eq });
-    mockFrom.mockReturnValue({ delete: del });
+  it('appelle la RPC delete_own_message et retourne message_type/storage_path pour un message photo', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ message_id: 'm1', message_type: 'image', storage_path: 'conv-1/user-1/abc.jpg' }],
+      error: null,
+    });
 
-    await deleteMessage('m1');
+    const result = await deleteOwnMessage('m1');
 
-    expect(mockFrom).toHaveBeenCalledWith('messages');
-    expect(eq).toHaveBeenCalledWith('id', 'm1');
+    expect(mockRpc).toHaveBeenCalledWith('delete_own_message', { p_message_id: 'm1' });
+    expect(result).toEqual({ messageId: 'm1', messageType: 'image', storagePath: 'conv-1/user-1/abc.jpg' });
   });
 
-  it('remonte une erreur française en cas d’échec', async () => {
-    const eq = jest.fn().mockResolvedValue({ error: { message: 'denied' } });
-    const del = jest.fn().mockReturnValue({ eq });
-    mockFrom.mockReturnValue({ delete: del });
+  it('retourne storagePath null pour un message texte', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ message_id: 'm1', message_type: 'text', storage_path: null }],
+      error: null,
+    });
 
-    await expect(deleteMessage('m1')).rejects.toThrow('Impossible de supprimer le message');
+    const result = await deleteOwnMessage('m1');
+
+    expect(result).toEqual({ messageId: 'm1', messageType: 'text', storagePath: null });
+  });
+
+  it('résout null (idempotent) quand le message est déjà supprimé, sans lever d’erreur', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    await expect(deleteOwnMessage('m1')).resolves.toBeNull();
+  });
+
+  it("remonte le message d'une exception levée par la RPC elle-même (code P0001, ex. message d'un autre utilisateur)", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Tu ne peux supprimer que tes propres messages.', code: 'P0001' },
+    });
+
+    await expect(deleteOwnMessage('m1')).rejects.toThrow('Tu ne peux supprimer que tes propres messages.');
+  });
+
+  it("n'expose jamais une erreur Postgres brute (code différent de P0001) : message français générique", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'connection reset by peer', code: '08006' },
+    });
+
+    await expect(deleteOwnMessage('m1')).rejects.toThrow('Impossible de supprimer le message pour le moment.');
+  });
+
+  it("ne passe jamais autre chose que p_message_id (aucun sender_id, aucune URL, aucun email)", async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ message_id: 'm1', message_type: 'text', storage_path: null }],
+      error: null,
+    });
+
+    await deleteOwnMessage('m1');
+
+    const params = mockRpc.mock.calls[0][1];
+    expect(Object.keys(params)).toEqual(['p_message_id']);
   });
 });
 

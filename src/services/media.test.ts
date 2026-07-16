@@ -10,6 +10,7 @@ import {
   pickVideoFromLibrary,
   recoverPendingMediaPick,
   removeAttachmentFile,
+  removeAttachmentFileOrThrow,
   uploadAttachment,
   uploadVideoResumable,
   VideoUploadCancelledError,
@@ -175,6 +176,28 @@ describe('removeAttachmentFile', () => {
     mockStorageFrom.mockReturnValue({ remove });
 
     await expect(removeAttachmentFile('conv-1/user-1/abc.jpg')).resolves.toBeUndefined();
+  });
+});
+
+describe('removeAttachmentFileOrThrow', () => {
+  it('supprime le fichier Storage correspondant, exactement ce chemin', async () => {
+    const remove = jest.fn().mockResolvedValue({ error: null });
+    mockStorageFrom.mockReturnValue({ remove });
+
+    await removeAttachmentFileOrThrow('conv-1/user-1/clip.mp4');
+
+    expect(mockStorageFrom).toHaveBeenCalledWith('chat-media');
+    expect(remove).toHaveBeenCalledWith(['conv-1/user-1/clip.mp4']);
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('propage une erreur française si la suppression Storage échoue (contrairement à removeAttachmentFile)', async () => {
+    const remove = jest.fn().mockResolvedValue({ error: { message: 'network down' } });
+    mockStorageFrom.mockReturnValue({ remove });
+
+    await expect(removeAttachmentFileOrThrow('conv-1/user-1/clip.mp4')).rejects.toThrow(
+      'Impossible de supprimer le fichier pour le moment.',
+    );
   });
 });
 
@@ -431,6 +454,80 @@ describe('uploadVideoResumable', () => {
 
     await expect(handle.promise).rejects.toThrow('Session expirée');
     expect(tus.Upload).not.toHaveBeenCalled();
+  });
+
+  it("retry() réutilise la même instance tus après une erreur réseau, sans en recréer une (reprise depuis le dernier octet)", async () => {
+    const blob = { size: 2_000_000 } as Blob;
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    expect(tus.Upload).toHaveBeenCalledTimes(1);
+    expect(mockUploadInstance.start).toHaveBeenCalledTimes(1);
+
+    capturedOptions?.onError?.(new Error('tus: network error'));
+    await expect(handle.promise).rejects.toThrow("Impossible d'envoyer la vidéo");
+
+    const retryPromise = handle.retry();
+
+    // Toujours la même ressource tus : aucune nouvelle instance créée,
+    // seulement une nouvelle tentative sur celle déjà en place.
+    expect(tus.Upload).toHaveBeenCalledTimes(1);
+    expect(mockUploadInstance.start).toHaveBeenCalledTimes(2);
+
+    capturedOptions?.onSuccess?.({ lastResponse: {} as tus.HttpResponse });
+    await expect(retryPromise).resolves.toEqual({
+      storagePath: expect.stringMatching(/^conv-1\/user-1\/[0-9a-f-]{36}\.mp4$/),
+      sizeBytes: 2_000_000,
+    });
+  });
+
+  it('retry() relaie toujours la progression via le même callback onProgress après une reprise', async () => {
+    const blob = { size: 2_000_000 } as Blob;
+    const onProgress = jest.fn();
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob, onProgress);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    capturedOptions?.onError?.(new Error('tus: network error'));
+    await expect(handle.promise).rejects.toThrow();
+
+    const retryPromise = handle.retry();
+    capturedOptions?.onProgress?.(1_800_000, 2_000_000);
+    expect(onProgress).toHaveBeenCalledWith(90);
+
+    capturedOptions?.onSuccess?.({ lastResponse: {} as tus.HttpResponse });
+    await retryPromise;
+  });
+
+  it("retry() recrée une ressource complète si l'échec précédent est survenu avant sa création (ex. session expirée)", async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    const blob = { size: 2_000_000 } as Blob;
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+
+    await expect(handle.promise).rejects.toThrow('Session expirée');
+    expect(tus.Upload).not.toHaveBeenCalled();
+
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-access-token' } }, error: null });
+    const retryPromise = handle.retry();
+    await waitForCapturedOptions(() => capturedOptions);
+
+    expect(tus.Upload).toHaveBeenCalledTimes(1);
+
+    capturedOptions?.onSuccess?.({ lastResponse: {} as tus.HttpResponse });
+    await expect(retryPromise).resolves.toEqual(expect.objectContaining({ sizeBytes: 2_000_000 }));
+  });
+
+  it('retry() après cancel() rejette immédiatement : la ressource est terminée côté serveur, jamais reprise', async () => {
+    const blob = { size: 2_000_000 } as Blob;
+    const handle = uploadVideoResumable('conv-1', 'user-1', picked, blob);
+    await waitForCapturedOptions(() => capturedOptions);
+
+    handle.cancel();
+    await expect(handle.promise).rejects.toBeInstanceOf(VideoUploadCancelledError);
+
+    await expect(handle.retry()).rejects.toThrow("Impossible d'envoyer la vidéo");
+    // start() n'a jamais été rappelé après le cancel : pas de reprise sur une
+    // ressource déjà terminée côté serveur.
+    expect(mockUploadInstance.start).toHaveBeenCalledTimes(1);
   });
 });
 

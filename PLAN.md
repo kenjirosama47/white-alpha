@@ -188,6 +188,74 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   Storage et `message_attachments`. Vidéo réelle conservée (aucune
   suppression). Phase 4B close.
 
+## Phase 5 — Finalisation, fiabilité et identité White Alpha
+
+### Phase 5.4 — Suppression sécurisée des messages et médias — Développée, migration distante appliquée
+- RPC `delete_own_message(p_message_id uuid)` (migration
+  `20260716090000_delete_own_message.sql`, **poussée sur le projet distant**,
+  `SECURITY DEFINER`, `search_path` explicite, `EXECUTE` réservé à
+  `authenticated`, refusé à `anon`/`public`) — vérifiée sur le projet
+  distant : vérifie `auth.uid()`, vérifie que `sender_id` correspond bien à
+  l'appelant (refuse toute suppression du message d'un autre utilisateur),
+  idempotente (un message déjà supprimé renvoie un résultat vide, jamais une
+  erreur), ne renvoie que `message_id`/`message_type`/`storage_path` (jamais
+  d'URL signée, d'email ni de chemin local), ne supprime jamais elle-même de
+  fichier Storage.
+- `alter table public.messages replica identity full` (même migration,
+  vérifiée sur le projet distant) : nécessaire pour que les événements
+  Realtime `DELETE` contiennent `conversation_id` dans la ligne `OLD` et
+  soient donc livrés au filtre `conversation_id=eq.<id>` déjà utilisé par
+  l'écran de conversation.
+- Ordre de suppression côté application (photo/vidéo) : fichier Storage
+  supprimé en premier (`removeAttachmentFileOrThrow`, propage l'échec,
+  contrairement à l'ancienne suppression best-effort) ; le message n'est
+  supprimé en base qu'une fois ce fichier confirmé supprimé. Si l'étape
+  Storage échoue, la base n'est jamais touchée. Si le fichier est supprimé
+  mais que la RPC échoue ensuite, une reprise automatique de l'étape base
+  (jusqu'à 3 tentatives, délais croissants) est tentée avant de proposer un
+  bouton « Réessayer » manuel — jamais une nouvelle suppression Storage.
+- Interface : action « Supprimer » sur ses propres messages uniquement,
+  confirmation avant suppression, état « Suppression… », erreur avec
+  « Réessayer », message retiré de la liste après succès (localement et via
+  l'événement Realtime `DELETE` chez l'autre participant).
+- Policies RLS `DELETE` de la Phase 4A (`sender_id = auth.uid()` sur
+  `messages`, `uploader_id = auth.uid()` sur `message_attachments` et
+  `storage.objects`) réutilisées sans modification comme source de vérité
+  de l'autorisation ; la RPC ajoute un point d'entrée unique et idempotent,
+  ne les remplace ni ne les affaiblit — grants de table inchangés (revérifiés
+  sur le projet distant : aucun `INSERT`/`DELETE` excessif réactivé pour
+  `anon`/`public`).
+- 85 tests pgTAP locaux passent (14 + 8 + 26 Phase 4A + 20 Phase 4B + 17
+  Phase 5.4), 149 tests unitaires Jest passent.
+- Tests manuels avec deux comptes réels (suppression d'un message texte, d'une
+  photo, d'une vidéo, refus côté destinataire, disparition en temps réel chez
+  l'autre participant) : **restant à faire**.
+
+### Phase 5.3 — Reprise et nouvelle tentative des uploads — Développée
+- Objectif : après un échec d'upload photo/vidéo, permettre une nouvelle
+  tentative sans re-sélectionner le fichier, dans la même session.
+- Vidéos (TUS) : `uploadVideoResumable` expose désormais `retry()`, qui
+  réutilise la même instance `tus.Upload` (donc la même ressource côté
+  serveur) pour reprendre depuis le dernier octet reçu, au lieu de repartir
+  de zéro — `retryDelays` de `tus-js-client` inchangés. Un cancel volontaire
+  (`cancelUpload`) termine définitivement la ressource côté serveur
+  (`abort(true)`) : plus aucune reprise possible ensuite, un futur envoi crée
+  une ressource entièrement neuve.
+- Photos : chaque tentative (y compris une reprise après échec) génère un
+  nouveau chemin Storage (`generateStoragePath`) — jamais d'écrasement d'un
+  fichier précédent.
+- État local uniquement (URI, MIME, taille, durée, dimensions), jamais
+  persisté en base ni journalisé ; jeton de session jamais exposé.
+- Une seule sélection/upload à la fois par écran de conversation (protection
+  déjà existante depuis la Phase 4B, revérifiée).
+- Interface : bouton « Réessayer » explicite après un échec (remplace
+  « Envoyer » quand une erreur est affichée), barre de progression vidéo
+  conservée après un échec reprenable (ne repart pas de 0 à la reprise).
+- Limitation MVP inchangée (documentée en Phase 4B) : aucune reprise après un
+  redémarrage complet de l'application (pas de persistance `urlStorage`).
+- Tests manuels avec deux comptes réels (coupure réseau puis reprise,
+  annulation, double tentative) : **restant à faire**.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`

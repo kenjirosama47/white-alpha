@@ -246,6 +246,21 @@ export async function removeAttachmentFile(storagePath: string): Promise<void> {
 }
 
 /**
+ * Supprime un fichier Storage et propage l'échec (contrairement à
+ * `removeAttachmentFile`, best-effort). Utilisée pour la suppression d'un
+ * message par son auteur : si ce fichier ne peut pas être supprimé, la ligne
+ * en base ne doit surtout pas l'être non plus (voir `deleteOwnMessage` dans
+ * `services/messages.ts`), pour ne jamais laisser un média sans message qui
+ * le référence, ni un message qui pointe vers un média déjà supprimé.
+ */
+export async function removeAttachmentFileOrThrow(storagePath: string): Promise<void> {
+  const { error } = await supabase.storage.from(CHAT_MEDIA_BUCKET).remove([storagePath]);
+  if (error) {
+    throw new Error('Impossible de supprimer le fichier pour le moment.');
+  }
+}
+
+/**
  * URL signée temporaire pour afficher un média privé (image ou vidéo). Ne
  * jamais persister la valeur retournée : elle doit être redemandée à
  * l'expiration.
@@ -289,6 +304,17 @@ export type VideoUploadHandle = {
   /** Résout `{ storagePath, sizeBytes }` au succès ; rejette avec `VideoUploadCancelledError` si `cancel()` est appelé, ou une erreur française sinon. */
   promise: Promise<{ storagePath: string; sizeBytes: number }>;
   cancel: () => void;
+  /**
+   * Reprend un upload interrompu par une erreur (coupure réseau, etc.),
+   * jamais un upload annulé volontairement via `cancel()` (la ressource tus
+   * est alors définitivement terminée côté serveur — voir `cancel`).
+   * Réutilise la même ressource tus tant qu'elle existe encore : reprend
+   * depuis le dernier octet reçu par le serveur au lieu de repartir de zéro.
+   * Ne persiste rien entre deux lancements de l'application (hors MVP).
+   * Ne doit être appelée qu'après un rejet de `promise` (ou du `retry()`
+   * précédent), jamais en parallèle d'une tentative encore active.
+   */
+  retry: () => Promise<{ storagePath: string; sizeBytes: number }>;
 };
 
 /**
@@ -315,17 +341,14 @@ export function uploadVideoResumable(
 
   const storagePath = generateStoragePath(conversationId, uploaderId, picked.mimeType);
   let uploadInstance: tus.Upload | null = null;
-  let rejectPromise: ((reason: unknown) => void) | null = null;
   let cancelled = false;
+  // Rebranchés à chaque tentative (initiale ou `retry()`) : c'est ce qui
+  // permet de réutiliser la même instance tus/le même Blob pour une reprise
+  // sans jamais recréer `promise` elle-même.
+  let currentResolve: ((value: { storagePath: string; sizeBytes: number }) => void) | null = null;
+  let currentReject: ((reason: unknown) => void) | null = null;
 
-  const promise = new Promise<{ storagePath: string; sizeBytes: number }>((resolve, reject) => {
-    rejectPromise = reject;
-
-    if (!validation.ok) {
-      reject(new Error(validation.error));
-      return;
-    }
-
+  function startNewAttempt(): void {
     getAccessToken()
       .then((accessToken) => {
         if (cancelled) return;
@@ -348,28 +371,69 @@ export function uploadVideoResumable(
           onError: () => {
             // Erreur générique volontaire : ne jamais exposer le détail brut
             // de tus-js-client (peut référencer la requête/réponse HTTP).
-            reject(new Error("Impossible d'envoyer la vidéo pour le moment."));
+            currentReject?.(new Error("Impossible d'envoyer la vidéo pour le moment."));
           },
           onProgress: (bytesUploaded, bytesTotal) => {
             onProgress?.(Math.round((bytesUploaded / bytesTotal) * 100));
           },
           onSuccess: () => {
-            resolve({ storagePath, sizeBytes: blob.size });
+            currentResolve?.({ storagePath, sizeBytes: blob.size });
           },
         });
         uploadInstance.start();
       })
       .catch((err) => {
-        reject(err instanceof Error ? err : new Error("Impossible d'envoyer la vidéo pour le moment."));
+        currentReject?.(err instanceof Error ? err : new Error("Impossible d'envoyer la vidéo pour le moment."));
       });
+  }
+
+  const promise = new Promise<{ storagePath: string; sizeBytes: number }>((resolve, reject) => {
+    currentResolve = resolve;
+    currentReject = reject;
+
+    if (!validation.ok) {
+      reject(new Error(validation.error));
+      return;
+    }
+
+    startNewAttempt();
   });
+
+  function retry(): Promise<{ storagePath: string; sizeBytes: number }> {
+    return new Promise((resolve, reject) => {
+      currentResolve = resolve;
+      currentReject = reject;
+
+      if (cancelled) {
+        reject(new Error("Impossible d'envoyer la vidéo pour le moment."));
+        return;
+      }
+
+      if (uploadInstance) {
+        // Reprend depuis le dernier octet reçu par le serveur : tus-js-client
+        // vérifie l'offset (requête HEAD) avant de continuer le PATCH, sans
+        // jamais retransmettre les octets déjà envoyés.
+        uploadInstance.start();
+      } else {
+        // Échec survenu avant la création de l'instance tus (ex. session
+        // expirée) : rien à reprendre, on retente l'authentification puis la
+        // création complète d'une nouvelle ressource.
+        startNewAttempt();
+      }
+    });
+  }
 
   return {
     promise,
     cancel: () => {
       cancelled = true;
+      // `abort(true)` termine la ressource côté serveur (DELETE) : plus rien
+      // à reprendre après un cancel volontaire, contrairement à une simple
+      // erreur réseau.
       uploadInstance?.abort(true);
-      rejectPromise?.(new VideoUploadCancelledError());
+      uploadInstance = null;
+      currentReject?.(new VideoUploadCancelledError());
     },
+    retry,
   };
 }

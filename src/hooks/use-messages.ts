@@ -24,6 +24,8 @@ type UseMessagesResult = {
   loadMore: () => void;
   /** Retourne `true` si l'envoi a réussi, `false` sinon (le contenu doit alors être conservé par l'appelant). */
   send: (content: string) => Promise<boolean>;
+  /** Retire immédiatement un message de l'état local (suppression optimiste côté auteur, avant même la confirmation Realtime). */
+  removeMessageLocally: (messageId: string) => void;
 };
 
 /**
@@ -109,6 +111,22 @@ export function useMessages(conversationId: string): UseMessagesResult {
             });
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          // REPLICA IDENTITY FULL sur messages (Phase 5.4) : la ligne OLD
+          // contient toutes les colonnes, dont id, malgré une suppression.
+          const deletedId = (payload.old as { id?: string } | null)?.id;
+          if (!deletedId) return;
+          setMessages((current) => current.filter((message) => message.id !== deletedId));
+        },
+      )
       .subscribe();
 
     return () => {
@@ -155,5 +173,20 @@ export function useMessages(conversationId: string): UseMessagesResult {
     [conversationId, session],
   );
 
-  return { messages, isLoading, isLoadingMore, hasMore, error, sendError, isSending, loadMore, send };
+  const removeMessageLocally = useCallback((messageId: string) => {
+    setMessages((current) => current.filter((message) => message.id !== messageId));
+  }, []);
+
+  return {
+    messages,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    error,
+    sendError,
+    isSending,
+    loadMore,
+    send,
+    removeMessageLocally,
+  };
 }

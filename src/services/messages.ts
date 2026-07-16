@@ -329,11 +329,45 @@ export async function fetchMessageById(messageId: string): Promise<Message | nul
   return mapMessageRow(data as unknown as MessageRow);
 }
 
-/** Supprime un message (et sa pièce jointe, en cascade côté base). Réservé à l'expéditeur, appliqué via RLS. */
-export async function deleteMessage(messageId: string): Promise<void> {
-  const { error } = await supabase.from('messages').delete().eq('id', messageId);
+export type DeleteOwnMessageResult = {
+  messageId: string;
+  messageType: 'text' | 'image' | 'video';
+  /** Chemin du média associé, `null` pour un message texte. Jamais une URL signée. */
+  storagePath: string | null;
+};
+
+type DeleteOwnMessageRow = {
+  message_id: string;
+  message_type: string;
+  storage_path: string | null;
+};
+
+/**
+ * Supprime un message via la RPC `delete_own_message` (et sa pièce jointe,
+ * en cascade côté base). `sender_id` n'est jamais transmis : la RPC vérifie
+ * elle-même que le message appartient à `auth.uid()`, et refuse sinon.
+ * Idempotente : appeler cette fonction sur un message déjà supprimé résout
+ * `null` plutôt que d'échouer — nécessaire pour la reprise après un échec
+ * survenant après la suppression du fichier Storage (voir
+ * `hooks/use-message-deletion.ts`), qui doit pouvoir réessayer cet appel
+ * sans risque de doublon ou d'erreur incohérente.
+ */
+export async function deleteOwnMessage(messageId: string): Promise<DeleteOwnMessageResult | null> {
+  const { data, error } = await supabase.rpc('delete_own_message', { p_message_id: messageId });
 
   if (error) {
-    throw new Error('Impossible de supprimer le message pour le moment.');
+    throw new Error(rpcErrorMessage(error, 'Impossible de supprimer le message pour le moment.'));
   }
+
+  const row = (Array.isArray(data) ? data[0] : data) as DeleteOwnMessageRow | undefined;
+  if (!row) {
+    // Idempotence : déjà supprimé par un appel précédent, pas une erreur.
+    return null;
+  }
+
+  return {
+    messageId: row.message_id,
+    messageType: row.message_type as DeleteOwnMessageResult['messageType'],
+    storagePath: row.storage_path,
+  };
 }
