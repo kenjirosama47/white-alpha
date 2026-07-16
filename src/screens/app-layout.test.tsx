@@ -11,6 +11,14 @@ import AppLayout from '@/app/(app)/_layout';
 // qu'un utilisateur non authentifié est redirigé vers (auth) avant même
 // d'atteindre /profile, sans dupliquer le test du mécanisme Stack.Protected
 // lui-même (primitive Expo Router, pas une logique propre à cette app).
+//
+// Ce fichier vit délibérément hors de src/app (contrairement à
+// src/app/(app)/_layout.tsx lui-même) : Expo Router scanne tout src/app via
+// require.context pour construire les routes de l'app, y compris les
+// fichiers de test — un .test.tsx placé à l'intérieur de src/app serait
+// embarqué dans le bundle Android de production et ferait échouer le build
+// (constaté : import de @testing-library/react-native, qui référence le
+// module Node "console", non résolvable par Metro pour la cible Android).
 jest.mock('expo-router', () => {
   const ReactActual = jest.requireActual('react');
   const { Text: RNText } = jest.requireActual('react-native');
