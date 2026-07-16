@@ -1,7 +1,7 @@
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -99,6 +99,14 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
         allowsPictureInPicture={false}
         contentFit="cover"
         fullscreenOptions={{ enable: true }}
+        // Par défaut ('surfaceView'), Android rend la vidéo sur une couche de
+        // composition séparée qui ignore l'ordre d'empilement React Native et
+        // peut recouvrir des vues sœurs (ex. le menu Supprimer) même quand
+        // celles-ci sont placées après elle dans l'arbre — c'est le
+        // comportement documenté par expo-video lui-même pour ce prop
+        // ("overlapping video views"). 'textureView' fait participer la
+        // vidéo à l'empilement normal des vues Android.
+        surfaceType={Platform.OS === 'android' ? 'textureView' : undefined}
       />
       {status === 'loading' && (
         <View style={styles.loadingOverlay} pointerEvents="none">

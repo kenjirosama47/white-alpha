@@ -199,6 +199,17 @@ describe('removeAttachmentFileOrThrow', () => {
       'Impossible de supprimer le fichier pour le moment.',
     );
   });
+
+  it('idempotente : un fichier déjà absent (déjà supprimé) ne lève pas d\'erreur (sémantique Storage/S3 standard : DELETE sur une clé absente réussit)', async () => {
+    // Le Storage Supabase (compatible S3) ne renvoie pas d'erreur pour la
+    // suppression d'un objet déjà absent : `data` reflète simplement 0 fichier
+    // réellement supprimé, `error` reste null. La suppression du message en
+    // base (RPC delete_own_message) doit donc pouvoir continuer normalement.
+    const remove = jest.fn().mockResolvedValue({ data: [], error: null });
+    mockStorageFrom.mockReturnValue({ remove });
+
+    await expect(removeAttachmentFileOrThrow('conv-1/user-1/deja-absent.mp4')).resolves.toBeUndefined();
+  });
 });
 
 describe('getSignedAttachmentUrl', () => {
