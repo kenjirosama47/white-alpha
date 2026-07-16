@@ -1,8 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppEmptyState } from '@/components/app-empty-state';
+import { AppErrorState } from '@/components/app-error-state';
+import { AppLoadingState } from '@/components/app-loading-state';
 import { ProfileSearchResult } from '@/components/profile-search-result';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -78,21 +81,13 @@ export default function SearchScreen() {
         )}
 
         {isSearching ? (
-          <ThemedView style={styles.centered}>
-            <ActivityIndicator />
-          </ThemedView>
+          <AppLoadingState accessibilityLabel="Recherche en cours" />
         ) : error ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              {error}
-            </ThemedText>
-          </ThemedView>
+          <AppErrorState description={error} />
+        ) : trimmedLength === 0 ? (
+          <AppEmptyState title="Rechercher un utilisateur" description="Tape un pseudo ou un nom pour commencer." />
         ) : trimmedLength >= SEARCH_MIN_LENGTH && results.length === 0 ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              Aucun utilisateur trouvé.
-            </ThemedText>
-          </ThemedView>
+          <AppEmptyState title="Aucun utilisateur trouvé" />
         ) : (
           <FlatList
             data={results}
@@ -143,15 +138,6 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#D14343',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.three,
-  },
-  centeredText: {
-    textAlign: 'center',
   },
   listContent: {
     gap: Spacing.one,

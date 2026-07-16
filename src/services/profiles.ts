@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { validateSearchQuery, type PublicProfile } from '@/types/chat';
+import { friendlyRpcError } from '@/utils/errors';
 
 type SearchProfileRow = {
   id: string;
@@ -29,7 +30,7 @@ export async function searchProfiles(query: string): Promise<PublicProfile[]> {
   });
 
   if (error) {
-    throw new Error(error.message || 'Impossible de rechercher des utilisateurs pour le moment.');
+    throw new Error(friendlyRpcError(error, 'Impossible de rechercher des utilisateurs pour le moment.'));
   }
 
   return (data ?? []).map(mapProfileRow);

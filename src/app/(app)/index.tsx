@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppEmptyState } from '@/components/app-empty-state';
+import { AppErrorState } from '@/components/app-error-state';
+import { AppLoadingState } from '@/components/app-loading-state';
 import { ConversationListItem } from '@/components/conversation-list-item';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -46,24 +49,11 @@ export default function ConversationsScreen() {
         </Pressable>
 
         {isLoading ? (
-          <ThemedView style={styles.centered}>
-            <ActivityIndicator />
-          </ThemedView>
+          <AppLoadingState accessibilityLabel="Chargement des conversations" />
         ) : error ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              {error}
-            </ThemedText>
-            <Pressable onPress={refresh} style={styles.buttonSecondary}>
-              <ThemedText type="smallBold">Réessayer</ThemedText>
-            </Pressable>
-          </ThemedView>
+          <AppErrorState description={error} onRetry={refresh} />
         ) : conversations.length === 0 ? (
-          <ThemedView style={styles.centered}>
-            <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-              Aucune conversation pour le moment. Lance une nouvelle discussion !
-            </ThemedText>
-          </ThemedView>
+          <AppEmptyState title="Aucune conversation" description="Recherchez un utilisateur pour commencer à discuter." />
         ) : (
           <FlatList
             data={conversations}
@@ -108,24 +98,8 @@ const styles = StyleSheet.create({
   buttonPrimaryLabel: {
     color: '#ffffff',
   },
-  buttonSecondary: {
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderWidth: 1,
-    borderColor: '#60646C',
-  },
   pressed: {
     opacity: 0.7,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.three,
-  },
-  centeredText: {
-    textAlign: 'center',
   },
   listContent: {
     gap: Spacing.one,

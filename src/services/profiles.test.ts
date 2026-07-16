@@ -29,9 +29,15 @@ describe('searchProfiles', () => {
     expect(result).toEqual([{ id: '1', username: 'bob', displayName: 'Bob', avatarUrl: null }]);
   });
 
-  it("remonte une erreur réseau/RPC sous forme d'exception", async () => {
+  it("ne laisse jamais fuir un message technique brut (pas de SQLSTATE P0001) : message français générique à la place", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'Network error' } });
 
-    await expect(searchProfiles('bob')).rejects.toThrow('Network error');
+    await expect(searchProfiles('bob')).rejects.toThrow('Impossible de rechercher des utilisateurs pour le moment.');
+  });
+
+  it("remonte le message d'une exception volontaire de la RPC (SQLSTATE P0001)", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: 'P0001', message: 'Requête invalide.' } });
+
+    await expect(searchProfiles('bob')).rejects.toThrow('Requête invalide.');
   });
 });

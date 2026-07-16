@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { listConversations } from '@/services/conversations';
 import type { ConversationSummary } from '@/types/chat';
 
@@ -46,6 +47,22 @@ export function useConversations(): UseConversationsResult {
     setIsRefreshing(true);
     load(true);
   }, [load]);
+
+  // Resynchronisation silencieuse au retour de connexion : recharge la liste
+  // (jamais `isLoading`, qui remplacerait la liste déjà affichée par un écran
+  // de chargement plein écran). `listConversations` n'est pas paginée : un
+  // rechargement complet est sûr et suffisant ici, contrairement à
+  // l'historique des messages d'une conversation (voir `use-messages.ts`, qui
+  // fusionne plutôt que de tout recharger). `load(true)` uniquement — pas
+  // `refresh()` — pour ne jamais déclencher l'indicateur "tirer pour
+  // actualiser" lors d'une synchronisation que l'utilisateur n'a pas demandée
+  // (et parce que ses seuls setState passent par .then/.catch/.finally,
+  // jamais de façon synchrone dans cet effet).
+  const { justReconnected } = useNetworkStatus();
+  useEffect(() => {
+    if (!justReconnected) return;
+    load(true);
+  }, [justReconnected, load]);
 
   return { conversations, isLoading, isRefreshing, error, refresh };
 }

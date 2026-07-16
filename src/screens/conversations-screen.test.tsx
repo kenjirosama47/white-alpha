@@ -27,7 +27,8 @@ describe('ConversationsScreen', () => {
 
     await render(<ConversationsScreen />);
 
-    expect(screen.getByText(/Aucune conversation pour le moment/i)).toBeTruthy();
+    expect(screen.getByText('Aucune conversation')).toBeTruthy();
+    expect(screen.getByText('Recherchez un utilisateur pour commencer à discuter.')).toBeTruthy();
   });
 
   it('affiche un état de chargement pendant la première récupération', async () => {
@@ -41,7 +42,7 @@ describe('ConversationsScreen', () => {
 
     await render(<ConversationsScreen />);
 
-    expect(screen.queryByText(/Aucune conversation pour le moment/i)).toBeNull();
+    expect(screen.queryByText('Aucune conversation')).toBeNull();
   });
 
   it("affiche un message d'erreur en français quand le chargement échoue", async () => {

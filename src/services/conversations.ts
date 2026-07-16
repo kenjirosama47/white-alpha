@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { ConversationSummary } from '@/types/chat';
+import { friendlyRpcError } from '@/utils/errors';
 
 type ListConversationsRow = {
   conversation_id: string;
@@ -30,7 +31,7 @@ export async function listConversations(): Promise<ConversationSummary[]> {
   const { data, error } = await supabase.rpc('list_my_conversations');
 
   if (error) {
-    throw new Error(error.message || 'Impossible de charger les conversations pour le moment.');
+    throw new Error(friendlyRpcError(error, 'Impossible de charger les conversations pour le moment.'));
   }
 
   return (data ?? []).map(mapConversationRow);
@@ -43,7 +44,7 @@ export async function getOrCreateConversation(targetUserId: string): Promise<str
   });
 
   if (error) {
-    throw new Error(error.message || 'Impossible de créer la conversation pour le moment.');
+    throw new Error(friendlyRpcError(error, 'Impossible de créer la conversation pour le moment.'));
   }
   if (!data) {
     throw new Error('Impossible de créer la conversation pour le moment.');

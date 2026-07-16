@@ -1,9 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/contexts/auth-context';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { supabase } from '@/lib/supabase';
 import { fetchMessageById, fetchMessages, MESSAGES_PAGE_SIZE, sendMessage as sendMessageService } from '@/services/messages';
 import type { Message } from '@/types/chat';
+
+/**
+ * Fusionne les messages déjà affichés avec une page fraîchement récupérée
+ * (ex. resynchronisation après reconnexion), sans jamais réinitialiser toute
+ * la conversation : les messages déjà présents sont conservés, seuls ceux
+ * manquants sont ajoutés. Dédoublonnage par id, tri chronologique stable.
+ */
+function mergeMessages(existing: Message[], fresh: Message[]): Message[] {
+  const byId = new Map(existing.map((message) => [message.id, message]));
+  for (const message of fresh) {
+    byId.set(message.id, message);
+  }
+  return Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
 
 type RealtimeMessageRow = {
   id: string;
@@ -26,6 +41,8 @@ type UseMessagesResult = {
   send: (content: string) => Promise<boolean>;
   /** Retire immédiatement un message de l'état local (suppression optimiste côté auteur, avant même la confirmation Realtime). */
   removeMessageLocally: (messageId: string) => void;
+  /** Relance le chargement initial après une erreur (bouton « Réessayer »). Sans effet pendant le chargement. */
+  retryInitialLoad: () => void;
 };
 
 /**
@@ -42,6 +59,10 @@ export function useMessages(conversationId: string): UseMessagesResult {
   const [error, setError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  // Incrémenté par `retryInitialLoad` pour relancer l'effet de chargement
+  // initial ci-dessous sans dupliquer sa logique.
+  const [reloadToken, setReloadToken] = useState(0);
+  const { justReconnected } = useNetworkStatus();
 
   // Ref plutôt que le seul état `isSending` : setState est asynchrone/batché
   // et n'empêcherait pas un double-tap arrivant avant le premier re-render.
@@ -75,7 +96,36 @@ export function useMessages(conversationId: string): UseMessagesResult {
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, reloadToken]);
+
+  // Appelée depuis un gestionnaire d'événement (bouton « Réessayer »), jamais
+  // depuis un effet : la remise à zéro synchrone de l'état y est sûre (même
+  // principe que `refresh()` dans use-signed-attachment-url.ts).
+  const retryInitialLoad = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    setReloadToken((token) => token + 1);
+  }, []);
+
+  // Resynchronisation silencieuse après un retour de connexion : le canal
+  // Realtime (ci-dessous) se reconnecte déjà seul (comportement natif de
+  // supabase-js, aucune re-souscription manuelle nécessaire — un seul canal
+  // par conversation, jamais recréé ici), mais les événements survenus
+  // pendant la coupure ne sont jamais rejoués. On récupère donc la page la
+  // plus récente et on la FUSIONNE (voir `mergeMessages`) : les messages déjà
+  // affichés restent en place, seuls ceux manquants s'ajoutent — jamais de
+  // réinitialisation ni de doublon (dédoublonnage par id).
+  useEffect(() => {
+    if (!justReconnected) return;
+    fetchMessages(conversationId)
+      .then((fresh) => {
+        setMessages((current) => mergeMessages(current, fresh));
+      })
+      .catch(() => {
+        // Échec silencieux : une resynchronisation en arrière-plan ne doit
+        // jamais remplacer l'état déjà affiché ni interrompre l'utilisateur.
+      });
+  }, [justReconnected, conversationId]);
 
   useEffect(() => {
     const channel = supabase
@@ -188,5 +238,6 @@ export function useMessages(conversationId: string): UseMessagesResult {
     loadMore,
     send,
     removeMessageLocally,
+    retryInitialLoad,
   };
 }

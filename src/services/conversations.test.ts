@@ -23,19 +23,21 @@ describe('getOrCreateConversation', () => {
     expect(id).toBe('conv-123');
   });
 
-  it("remonte le message d'erreur de la RPC quand la création est refusée", async () => {
+  it("remonte le message d'une exception volontaire de la RPC (SQLSTATE P0001) quand la création est refusée", async () => {
     mockRpc.mockResolvedValue({
       data: null,
-      error: { message: 'Impossible de créer une conversation avec soi-même.' },
+      error: { code: 'P0001', message: 'Impossible de créer une conversation avec soi-même.' },
     });
 
     await expect(getOrCreateConversation('self')).rejects.toThrow('soi-même');
   });
 
-  it("remonte une erreur réseau sous forme d'exception", async () => {
+  it("ne laisse jamais fuir un message technique brut (pas de SQLSTATE P0001) : message français générique à la place", async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'Network error' } });
 
-    await expect(getOrCreateConversation('user-b')).rejects.toThrow('Network error');
+    await expect(getOrCreateConversation('user-b')).rejects.toThrow(
+      'Impossible de créer la conversation pour le moment.',
+    );
   });
 });
 

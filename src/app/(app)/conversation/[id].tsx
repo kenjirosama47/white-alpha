@@ -1,16 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppEmptyState } from '@/components/app-empty-state';
+import { AppErrorState } from '@/components/app-error-state';
+import { AppLoadingState } from '@/components/app-loading-state';
 import { AttachmentComposerPreview } from '@/components/attachment-composer-preview';
 import { ImageViewerModal } from '@/components/image-viewer-modal';
 import { MessageBubble } from '@/components/message-bubble';
@@ -33,8 +28,18 @@ export default function ConversationScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
-  const { messages, isLoading, isLoadingMore, error, sendError, isSending, loadMore, send, removeMessageLocally } =
-    useMessages(id);
+  const {
+    messages,
+    isLoading,
+    isLoadingMore,
+    error,
+    sendError,
+    isSending,
+    loadMore,
+    send,
+    removeMessageLocally,
+    retryInitialLoad,
+  } = useMessages(id);
   const { getDeletionState, deleteMessage, retryDeletion } = useMessageDeletion(removeMessageLocally);
   const {
     pickedMedia,
@@ -103,21 +108,11 @@ export default function ConversationScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}>
           {isLoading ? (
-            <ThemedView style={styles.centered}>
-              <ActivityIndicator />
-            </ThemedView>
+            <AppLoadingState accessibilityLabel="Chargement des messages" />
           ) : error ? (
-            <ThemedView style={styles.centered}>
-              <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-                {error}
-              </ThemedText>
-            </ThemedView>
+            <AppErrorState description={error} onRetry={retryInitialLoad} />
           ) : messages.length === 0 ? (
-            <ThemedView style={styles.centered}>
-              <ThemedText themeColor="textSecondary" style={styles.centeredText}>
-                Aucun message pour le moment. Écris le premier !
-              </ThemedText>
-            </ThemedView>
+            <AppEmptyState title="Aucun message pour le moment" description="Écris le premier !" />
           ) : (
             <FlatList
               style={styles.messageList}
@@ -268,15 +263,6 @@ const styles = StyleSheet.create({
   },
   keyboardAvoiding: {
     flex: 1,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.three,
-  },
-  centeredText: {
-    textAlign: 'center',
   },
   messageList: {
     flex: 1,

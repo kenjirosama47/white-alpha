@@ -1,21 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { validateMessageContent, type ImageMimeType, type Message, type VideoMimeType } from '@/types/chat';
+import { rpcErrorMessage } from '@/utils/errors';
 
 export const MESSAGES_PAGE_SIZE = 30;
-
-// SQLSTATE que Postgres assigne à `raise exception '...'` sans code explicite
-// (notre style dans toutes les RPC create_*_message). Ne faire confiance à
-// `error.message` que pour ce code précis : toute autre erreur (contrainte
-// violée en dehors d'un raise exception, erreur de type, panne réseau, etc.)
-// est un détail technique brut qui ne doit jamais atteindre l'utilisateur.
-const RAISE_EXCEPTION_SQLSTATE = 'P0001';
-
-function rpcErrorMessage(error: { message?: string; code?: string } | null, fallback: string): string {
-  if (error?.code === RAISE_EXCEPTION_SQLSTATE && error.message) {
-    return error.message;
-  }
-  return fallback;
-}
 
 const MESSAGE_SELECT =
   'id, conversation_id, sender_id, content, created_at, ' +

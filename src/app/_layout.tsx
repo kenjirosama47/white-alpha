@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { OfflineBanner } from '@/components/offline-banner';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -16,6 +17,9 @@ function RootNavigator() {
   return (
     <>
       <AnimatedSplashOverlay ready={!isLoading} />
+      {/* Un seul abonnement réseau pour toute l'application (pas un par
+          écran) : monté ici, jamais dans (app)/(auth). */}
+      <OfflineBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={isAuthenticated}>
           <Stack.Screen name="(app)" />

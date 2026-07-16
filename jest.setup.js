@@ -2,3 +2,16 @@
 // asynchrones (promesses résolues après le premier rendu) soient reconnues
 // comme faisant partie de l'environnement de test act().
 global.IS_REACT_ACT_ENVIRONMENT = true;
+
+// Mock global : le module natif @react-native-community/netinfo n'existe pas
+// dans l'environnement de test (jsdom/react-test-renderer) et plante sinon
+// dès qu'un composant/hook utilisant useNetworkStatus est rendu (Phase 5.2).
+// Par défaut, connecté : les tests qui veulent simuler une coupure réseau
+// surchargent `addEventListener` via `jest.mock(...)` dans leur propre fichier.
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: {
+    addEventListener: jest.fn(() => () => {}),
+    fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+  },
+}));

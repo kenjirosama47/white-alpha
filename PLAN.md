@@ -290,6 +290,45 @@ Pas d'appels audio/vidéo, pas de groupes en V1.
   cohérentes ; aucun doublon ni fichier orphelin issus de la tentative
   interrompue ; bucket `chat-media` toujours privé. Phase 5.3 close.
 
+### Phase 5.2 — États chargement, vide, erreur et connexion réseau cohérents — Développée
+- Objectif : uniformiser les états (chargement, liste vide, erreur récupérable,
+  absence de connexion, reconnexion, nouvelle tentative) sur les écrans
+  Conversations, Recherche et Discussion, sans toucher à la logique métier de
+  la messagerie/photos/vidéos/suppression/reprise (inchangée).
+- Composants partagés intégrés (`src/components/`) : `AppLoadingState`,
+  `AppEmptyState`, `AppErrorState`, `RetryButton`, `OfflineBanner` — props
+  simples (titre, description, action optionnelle, libellé bouton, compact/
+  plein écran, `accessibilityLabel`), style noir existant conservé. Intégrés
+  dans les trois écrans (`index.tsx`, `search.tsx`, `conversation/[id].tsx`),
+  remplaçant les blocs de chargement/erreur/vide ad hoc précédents.
+- Erreurs centralisées (`src/utils/errors.ts`) : `describeError`/
+  `classifyError` traduisent toute erreur inattendue (réseau, délai dépassé,
+  session expirée, accès refusé, serveur indisponible) en message français ;
+  `rpcErrorMessage`/`friendlyRpcError` ne font confiance à `error.message` que
+  pour une exception volontaire de RPC (SQLSTATE `P0001`) — jamais un message
+  Postgres brut. Appliqué à `services/conversations.ts` et
+  `services/profiles.ts` (fuite de message technique brut corrigée) ; réutilisé
+  sans changement de comportement dans `services/messages.ts`.
+- Connexion réseau : nouvelle dépendance `@react-native-community/netinfo`
+  (12.0.1, installée via `expo install`, compatible SDK 57). Hook
+  `use-network-status.ts` + `OfflineBanner` monté une seule fois dans le
+  layout racine (`src/app/_layout.tsx`) : bandeau « Aucune connexion
+  Internet » pendant une coupure, « Connexion rétablie » brièvement (3s) au
+  retour. Aucune déconnexion automatique, aucune donnée déjà chargée effacée.
+- **Reconnexion Realtime protégée contre les abonnements multiples** : le
+  canal Realtime existant (un seul par conversation, déjà en place depuis la
+  Phase 3) se reconnecte seul au niveau du WebSocket (comportement natif
+  `supabase-js`) — aucune re-souscription manuelle ajoutée. Au retour de
+  connexion, une resynchronisation silencieuse récupère les données
+  manquées : `use-messages.ts` **fusionne** les messages (jamais de
+  réinitialisation, dédoublonnage par id) ; `use-conversations.ts` recharge la
+  liste complète (non paginée, donc sûr) sans jamais déclencher l'écran de
+  chargement plein écran ni l'indicateur « tirer pour actualiser ». Vérifié
+  par test : un seul canal/abonnement créé, aucun doublon après reconnexion.
+- 220 tests unitaires Jest passent (166 + 54 pour cette phase), `tsc`/`lint`/
+  `expo-doctor` au vert.
+- Test manuel Android (versionCode 8) : **restant à faire**.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
