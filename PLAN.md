@@ -773,10 +773,58 @@ constaté après clôture.
 
 **Phase 6 Assistant Claude annulée à la demande du propriétaire.**
 
+## Phase 6 — Notifications push privées, sécurisées et multi-appareils
+
+- **Architecture — Terminée et vérifiée.** Migration
+  `20260717190000_push_notifications.sql` (+ correctif de grants
+  `20260717200000_harden_push_notifications_grants.sql`) : tables
+  `user_push_devices`, `notification_preferences`, `push_notification_log`
+  (RLS active sur les trois, aucun accès `anon`, écriture exclusivement via
+  RPC `SECURITY DEFINER` à `search_path` fixé). Trigger
+  `notify_new_message_after_insert` (`pg_net`, no-op silencieux si non
+  configuré — aucun impact sur la messagerie existante).
+- **Edge Function `notify-new-message` — Déployée et vérifiée.** Protégée
+  par secret partagé (401 si absent/incorrect), `service_role` utilisé
+  uniquement côté serveur, expéditeur jamais notifié, contenu de
+  notification générique fixe (jamais le contenu réel du message),
+  déduplication par `(message_id, appareil)`, désactivation automatique
+  des tokens invalides.
+- **Client mobile — Terminé et vérifié.** Enregistrement/désactivation du
+  token (`src/lib/push-notifications.ts`), préférences utilisateur (écran
+  Profil → Notifications : activé/désactivé, aperçu écran verrouillé,
+  son), navigation sécurisée depuis une notification (revalidation
+  systématique de l'appartenance à la conversation via
+  `get_conversation_for_notification`, jamais de confiance dans les seules
+  données de la notification).
+- **Secrets — Configurés.** `NOTIFY_SHARED_SECRET` (Edge Function),
+  `notify_new_message_shared_secret` et `notify_new_message_url` (Vault
+  Postgres) — identité de valeur vérifiée par hachage, jamais par
+  affichage direct.
+- **Tests — Terminés.** 433 tests Jest, 30 assertions pgTAP dédiées (190
+  au total, aucune régression), test réel de l'Edge Function en local puis
+  sur le projet distant (trigger → `pg_net` → fonction déployée → API Expo
+  Push réelle), toutes données de test nettoyées après validation.
+- **Build 15 (versionCode 15) — Terminé et validé sur téléphone réel.**
+  Installation par-dessus le build 14, connexion Supabase, demande et
+  refus de permission sans blocage, activation depuis Profil, réception de
+  notification (application ouverte/arrière-plan/fermée), ouverture de la
+  bonne conversation, aucune donnée privée affichée, déconnexion
+  désactivant uniquement l'appareil courant, aucun plantage. Détail dans
+  `TEST_FINAL_BUILD15.md`.
+- Métadonnées non sensibles de l'APK validé :
+  - fichier : `release-local/WHITEALPHA_RELEASE_AUTONOME_BUILD15_NOTIFICATIONS.apk`
+  - taille : 97 418 241 octets
+  - SHA-256 : `2e04f6f45be06b4379574b850c1472c1af4f31f0bf023288ee8bbbe7baf97be9`
+  - package : `com.kenjiro.whitealpha`
+  - versionCode : 15
+  - empreinte publique du certificat (SHA-256) :
+    `c6c357d42b766c7e3d1fc0c9f8e9b9f2ce4fd0e8ed1afe63bf008799d3a09aee`
+    (identique aux builds 12/13/14, même keystore EAS)
+- Phase 6 Notifications close.
+
 ## Phase 7 — Durcissement & polish
 - Revue des policies RLS Supabase (accès conversations/messages/médias).
 - Gestion des erreurs réseau, états de chargement, écrans vides.
-- Notifications (à définir : push ou in-app uniquement).
 - Remplacement des assets de démonstration Expo restants (logo/splash) par le
   branding définitif de l'application.
 
