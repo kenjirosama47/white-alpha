@@ -750,7 +750,24 @@ l'audit lui-même.
 - **Décision finale** : aucune anomalie bloquante constatée. Le build 14
   (versionCode 14) est retenu comme version stable v1.0.0. Aucun
   versionCode 15 créé.
+- **Checklist manuelle finale (rejouée sur téléphone réel) — Terminée et
+  validée intégralement** : ouverture directe, session conservée,
+  connexion utilisateur normal, connexion propriétaire et MFA,
+  conversations/recherche/discussion, envoi message/photo/vidéo,
+  suppression, hors connexion puis reconnexion, capture écran privé
+  bloquée, aperçu applications récentes masqué, redémarrage téléphone puis
+  réouverture — aucun plantage. Détail dans `TEST_FINAL_BUILD14.md`.
 - Phase 5.S6 close.
+
+## Phase 5 — Clôture définitive et gel stable v1.0.0
+
+La checklist manuelle finale du build 14 ayant été validée intégralement
+sur téléphone réel, sans aucune anomalie, la **Phase 5 est officiellement
+close**. La version stable **White Alpha v1.0.0 (build 14, versionCode 14)**
+est gelée fonctionnellement : aucune fonctionnalité n'est modifiée sans
+anomalie reproductible confirmée. Toute évolution ultérieure relève de la
+Phase 6 (non commencée) ou d'une phase corrective dédiée en cas de défaut
+constaté après clôture.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.

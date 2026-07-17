@@ -74,6 +74,27 @@ message/photo/vidéo, suppression, capture bloquée sur écran privé, aperçu
 des applications récentes masqué, comportement arrière-plan/premier plan,
 fermeture et réouverture — aucun plantage constaté.
 
+### Checklist manuelle finale (rejouée sur téléphone réel, build 14)
+
+Dernière repasse complète avant clôture définitive de la Phase 5, exécutée
+par l'utilisateur sur son appareil réel :
+
+- ouverture directe — OK
+- session conservée — OK
+- connexion utilisateur normal — OK
+- connexion propriétaire et MFA — OK
+- conversations/recherche/discussion — OK
+- envoi message/photo/vidéo — OK
+- suppression — OK
+- hors connexion puis reconnexion — OK
+- capture écran privé bloquée — OK
+- aperçu applications récentes masqué — OK
+- redémarrage téléphone puis réouverture — OK
+- aucun plantage — OK
+
+Tous les points de la checklist finale sont validés sans exception. Aucune
+anomalie résiduelle constatée.
+
 ## 4. Base de données et Storage
 
 - RLS active sur les 4 tables exposées (`profiles`, `conversations`,
