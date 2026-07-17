@@ -513,6 +513,50 @@ l'audit lui-même.
   conversations/messages/photos/vidéos/profil/avatar tous fonctionnels,
   aucune boucle de chargement ni fermeture de l'app. Phase 5.S1 close.
 
+### Phase 5.S2 — Protection écran et build Release autonome signé — Terminée et validée
+- Protection anti-capture d'écran (`expo-screen-capture`) validée sur
+  émulateur ; permission `DETECT_SCREEN_CAPTURE` retirée de
+  `blockedPermissions` (elle causait un crash natif) ; seule
+  `READ_MEDIA_IMAGES` reste bloquée. Correctif de rendu des boutons
+  `Pressable`/`Link asChild` (fusion de style via `@radix-ui/react-slot`)
+  validé, 9 tests unitaires ajoutés.
+- Keystore EAS existant récupéré (`eas credentials -p android`, aucune
+  régénération) et signature Release configurée exclusivement via
+  `%USERPROFILE%\.gradle\gradle.properties` (propriétés privées, jamais
+  commitées) ; `android/app/build.gradle` durci : `GradleException`
+  explicite si une propriété de signature manque, aucun repli vers
+  `debug.keystore`.
+- Diagnostic et retrait effectif de `expo-dev-client` (dépendance native
+  autolinkée, pas seulement un plugin `app.config.js`) pour produire un APK
+  Release réellement autonome, via un git worktree isolé
+  (`WhiteAlpha_release_build12_temp`) sans jamais modifier le dépôt
+  principal. Absence de `expo-dev-client`/`expo-dev-launcher` vérifiée par
+  inspection directe des fichiers DEX et du bundle JS embarqué, pas
+  seulement par `debuggable=false`.
+- Cause d'un premier crash au lancement identifiée avec certitude : le
+  fichier `.env` (gitignoré) n'existe pas dans un `git worktree` fraîchement
+  créé (seuls les fichiers suivis par git y sont matérialisés), donc les
+  variables `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+  étaient absentes du bundle de production, provoquant un
+  `JavascriptException` fatal immédiat. Corrigé en copiant `.env` dans le
+  worktree avant reconstruction (fichier jamais suivi par git).
+- **Test manuel — Terminé et validé**, sur téléphone réel avec l'APK Release
+  autonome corrigé : ouverture directe de White Alpha sans écran
+  Development Build et sans tentative de connexion à Metro, aucune erreur
+  « Variables Supabase manquantes », démarrage sans crash, fermeture puis
+  réouverture sans régression, écran de connexion fonctionnel, protection
+  écran et stockage sécurisé (Phase 5.S1) conservés.
+- Métadonnées non sensibles de l'APK validé :
+  - fichier : `release-local/WHITEALPHA_RELEASE_AUTONOME_BUILD12_CORRIGE.apk`
+  - taille : 107 474 430 octets
+  - SHA-256 : `fe8ee71f560312ce4e89c0953d998e72f459a58945af9106ba58bdd2ae4e6ff0`
+  - package : `com.kenjiro.whitealpha`
+  - versionCode : 12
+  - empreinte publique du certificat (SHA-256) :
+    `c6c357d42b766c7e3d1fc0c9f8e9b9f2ce4fd0e8ed1afe63bf008799d3a09aee`
+    (identique au keystore EAS existant, aucune nouvelle clé créée)
+  - Phase 5.S2 close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
