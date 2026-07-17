@@ -717,6 +717,41 @@ l'audit lui-même.
     (identique au keystore EAS existant, aucune nouvelle clé créée)
   - Phase 5.S5 close.
 
+## Phase 5.S6 — Validation finale, gel fonctionnel et version stable v1.0.0
+
+- **Validations automatiques (npm ci, tests, tsc, lint, expo-doctor, export,
+  db reset/test/lint/push --dry-run) — Terminé.** Aucun échec bloquant.
+  Seul point relevé par expo-doctor : 5 paquets Expo en retard d'un
+  correctif mineur (aucune mise à jour automatique effectuée, conformément
+  à la consigne de gel fonctionnel). Détail dans `TEST_FINAL_BUILD14.md`.
+- **Audit final de l'APK build 14 (inspection directe) — Terminé.** Signature
+  valide, `debuggable=false`, `allowBackup=false`, trafic chiffré
+  exclusivement, R8/shrinkResources actifs, aucun composant de
+  développement, aucun secret embarqué, permissions minimales. Détail dans
+  `TEST_FINAL_BUILD14.md`.
+- **Tests fonctionnels de non-régression — Terminé.** Messagerie, recherche,
+  suppression de message validées par simulation SQL directe (RLS/RPC) ;
+  gating AAL1/AAL2 du propriétaire validé (refus en AAL1, autorisation en
+  AAL2) ; création d'un second propriétaire bloquée sans effet de bord ;
+  double suppression d'un message idempotente sans erreur. Le reste de la
+  matrice (connexion, interface, capture privée, cycle de vie de
+  l'application) couvert par le test réel déjà validé sur l'appareil
+  (build 14, voir clôture de la Phase 5.S5 ci-dessus).
+- **Contrôles base de données et Storage — Terminé.** RLS active sur les 4
+  tables exposées, aucun privilège `anon`, fonctions `SECURITY DEFINER`
+  avec `search_path` fixé, buckets `chat-media` (privé) et `avatars`
+  (public par conception) conformes, aucune pièce jointe orpheline dans
+  les deux sens, suppression message+Storage cohérente. Données de test
+  utilisées uniquement (préfixe `phase51test*`), nettoyées après
+  validation.
+- **Documentation de release — Terminé.** Création de
+  `RELEASE_NOTES_v1.0.0.md`, `SECURITY.md`, `INSTALLATION_ANDROID.md`,
+  `TEST_FINAL_BUILD14.md`.
+- **Décision finale** : aucune anomalie bloquante constatée. Le build 14
+  (versionCode 14) est retenu comme version stable v1.0.0. Aucun
+  versionCode 15 créé.
+- Phase 5.S6 close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
