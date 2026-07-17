@@ -557,7 +557,7 @@ l'audit lui-même.
     (identique au keystore EAS existant, aucune nouvelle clé créée)
   - Phase 5.S2 close.
 
-### Phase 5.S3 — Rôle propriétaire unique et MFA TOTP — Validée localement, migration distante non poussée
+### Phase 5.S3 — Rôle propriétaire unique et MFA TOTP — Terminée et validée
 - Audit préalable du schéma existant (`auth.users`, `profiles`,
   `conversations`, `messages`, `message_attachments`, RPC, triggers,
   policies RLS, grants) : confirmé qu'il n'existe pas de table
@@ -589,9 +589,40 @@ l'audit lui-même.
   owner-aal2, non-régression messagerie pour `user` et `owner`) : 138/138
   assertions passent. Tests Jest (`use-mfa`, `lib/mfa`, écran Sécurité,
   service profils) : 377/377 tests passent. `tsc`/`lint`/`db lint` au vert.
-- **Non encore fait** : migration non poussée en distant, aucun owner
-  réellement attribué, aucun test MFA de bout en bout (nécessite un
-  enrôlement TOTP réel), aucun nouvel APK. Phase 5.S3 non close.
+- Migration `20260717150000_owner_role_and_mfa.sql` poussée vers le projet
+  Supabase distant et vérifiée directement (colonne/index/trigger/GRANT/
+  fonctions/search_path/policies existantes inchangées, `anon` toujours
+  sans privilège). Rôle owner attribué à un unique compte réel via
+  l'opération administrative documentée (hors application, non suivie par
+  Git, aucun UUID codé en dur) ; vérifié immédiatement après exécution
+  (exactement 1 owner). Tests de rôle rejoués contre la base distante :
+  messagerie `user` fonctionnelle, fonction owner refusée pour `user` et
+  pour `owner` en aal1, autorisée en aal2, modification directe de son
+  propre rôle refusée, création d'un second owner refusée même via le
+  chemin administratif (index unique indépendant du trigger).
+- APK Release autonome signé, versionCode 13, produit via un git worktree
+  isolé (même méthode que la Phase 5.S2, `.env` copié avant reconstruction,
+  jamais suivi par Git) : `expo-dev-client` retiré et vérifié absent
+  (DEX + bundle), aucun secret TOTP dans le bundle (aucun secret n'est
+  généré à la compilation, uniquement à l'enrôlement runtime), aucune
+  permission caméra/micro/localisation/contacts, `debuggable=false`,
+  `allowBackup=false`, certificat identique au keystore EAS.
+- **Test manuel — Terminé et validé**, sur téléphone réel avec le compte
+  owner réel : ouverture directe, connexion, badge Propriétaire, écran
+  Sécurité du compte, enrôlement TOTP réel (QR code affiché uniquement
+  pendant l'enrôlement), code TOTP correct accepté, passage effectif à
+  aal2, fermeture puis réouverture de l'app sans régression, code TOTP
+  incorrect refusé, protection FLAG_SECURE active sur l'écran MFA.
+- Métadonnées non sensibles de l'APK validé :
+  - fichier : `release-local/WHITEALPHA_RELEASE_AUTONOME_BUILD13_MFA.apk`
+  - taille : 107 496 906 octets
+  - SHA-256 : `f529d623b0519ae852f02cc2a25359ad28804151c32d35965ba86f90054fc72a`
+  - package : `com.kenjiro.whitealpha`
+  - versionCode : 13
+  - empreinte publique du certificat (SHA-256) :
+    `c6c357d42b766c7e3d1fc0c9f8e9b9f2ce4fd0e8ed1afe63bf008799d3a09aee`
+    (identique au keystore EAS existant, aucune nouvelle clé créée)
+  - Phase 5.S3 close.
 
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
