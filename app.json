@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kenjiro.whitealpha",
-      "versionCode": 13,
+      "versionCode": 14,
       "allowBackup": false,
       "blockedPermissions": ["android.permission.READ_MEDIA_IMAGES"]
     },
