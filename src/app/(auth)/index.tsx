@@ -1,4 +1,5 @@
 import { Link } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +9,9 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function WelcomeScreen() {
+  const [primaryPressed, setPrimaryPressed] = useState(false);
+  const [secondaryPressed, setSecondaryPressed] = useState(false);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -23,7 +27,20 @@ export default function WelcomeScreen() {
 
         <ThemedView style={styles.actions}>
           <Link href="/login" asChild>
-            <Pressable style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
+            {/* Style ni fonction ni tableau ici, obligatoirement : <Link
+                asChild> délègue la fusion des props à @radix-ui/react-slot
+                (expo-router ui/Slot.js), qui fusionne `style` par spread
+                d'objet (`{...style}`) et rejette explicitement (throw en
+                dev, échec silencieux en prod) tout style qui n'est pas un
+                objet déjà aplati : une fonction spreadée perd toutes ses
+                propriétés (aucune propriété propre énumérable), un tableau
+                spreadé devient {0: ..., 1: ...} au lieu d'un style valide.
+                D'où StyleSheet.flatten(...) appelé directement (jamais dans
+                un callback) et l'état pressed géré manuellement. */}
+            <Pressable
+              onPressIn={() => setPrimaryPressed(true)}
+              onPressOut={() => setPrimaryPressed(false)}
+              style={StyleSheet.flatten([styles.buttonPrimary, primaryPressed && styles.buttonPrimaryPressed])}>
               <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
                 Se connecter
               </ThemedText>
@@ -31,7 +48,9 @@ export default function WelcomeScreen() {
           </Link>
           <Link href="/register" asChild>
             <Pressable
-              style={({ pressed }) => [styles.buttonSecondary, pressed && styles.pressed]}>
+              onPressIn={() => setSecondaryPressed(true)}
+              onPressOut={() => setSecondaryPressed(false)}
+              style={StyleSheet.flatten([styles.buttonSecondary, secondaryPressed && styles.buttonSecondaryPressed])}>
               <ThemedText type="smallBold">Créer un compte</ThemedText>
             </Pressable>
           </Link>
@@ -77,6 +96,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     alignItems: 'center',
   },
+  buttonPrimaryPressed: {
+    opacity: 0.7,
+  },
   buttonPrimaryLabel: {
     color: '#ffffff',
   },
@@ -87,7 +109,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#60646C',
   },
-  pressed: {
+  buttonSecondaryPressed: {
     opacity: 0.7,
   },
 });

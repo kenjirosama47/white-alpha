@@ -21,7 +21,7 @@
       "package": "com.kenjiro.whitealpha",
       "versionCode": 12,
       "allowBackup": false,
-      "blockedPermissions": ["android.permission.READ_MEDIA_IMAGES", "android.permission.DETECT_SCREEN_CAPTURE"]
+      "blockedPermissions": ["android.permission.READ_MEDIA_IMAGES"]
     },
     "web": {
       "output": "static",

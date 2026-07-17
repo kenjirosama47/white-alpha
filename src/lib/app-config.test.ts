@@ -20,9 +20,19 @@ describe('app.json — configuration Android', () => {
     expect(appJson.expo.android.versionCode).toBe(12);
   });
 
-  it('bloque les permissions non nécessaires introduites par expo-screen-capture (détection uniquement, non utilisée)', () => {
+  it('bloque READ_MEDIA_IMAGES (permission de détection introduite par expo-screen-capture, non utilisée)', () => {
     expect(appJson.expo.android.blockedPermissions).toEqual(
-      expect.arrayContaining(['android.permission.READ_MEDIA_IMAGES', 'android.permission.DETECT_SCREEN_CAPTURE']),
+      expect.arrayContaining(['android.permission.READ_MEDIA_IMAGES']),
     );
+  });
+
+  // DETECT_SCREEN_CAPTURE ne doit PAS être bloquée : ScreenCaptureModule.kt
+  // (expo-screen-capture) l'exige dès son OnCreate (Activity.registerScreenCaptureCallback,
+  // API 34+) pour son initialisation native, indépendamment de tout appel JS
+  // à une API de détection (aucune n'est utilisée dans ce projet). La
+  // bloquer provoque un crash immédiat au démarrage sur Android 14+
+  // (constaté par test manuel réel sur émulateur API 36, Phase 5.S2).
+  it("ne bloque pas DETECT_SCREEN_CAPTURE (nécessaire à l'initialisation native d'expo-screen-capture, sinon crash au démarrage sur API 34+)", () => {
+    expect(appJson.expo.android.blockedPermissions).not.toContain('android.permission.DETECT_SCREEN_CAPTURE');
   });
 });
