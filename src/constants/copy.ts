@@ -26,8 +26,13 @@ export const REGISTER_COPY = {
 export const EMPTY_CONVERSATIONS_COPY = {
   title: 'La meute est encore silencieuse',
   description: 'Commencez une conversation privée',
+  actionLabel: 'Nouvelle conversation',
 } as const;
 
 export const SECURITY_COPY = {
   title: 'Votre espace reste protégé',
+} as const;
+
+export const SEARCH_COPY = {
+  noResultsTitle: 'Aucun membre trouvé',
 } as const;

@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppEmptyState } from '@/components/app-empty-state';
@@ -8,17 +9,20 @@ import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { AttachmentComposerPreview } from '@/components/attachment-composer-preview';
 import { AvatarImage } from '@/components/avatar-image';
+import { Button } from '@/components/button';
+import { DateSeparator } from '@/components/date-separator';
 import { ImageViewerModal } from '@/components/image-viewer-modal';
 import { MessageBubble } from '@/components/message-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme } from '@/hooks/use-theme';
 import { useMediaUpload } from '@/hooks/use-media-upload';
 import { useMessageDeletion } from '@/hooks/use-message-deletion';
 import { useMessages } from '@/hooks/use-messages';
+import { useTheme } from '@/hooks/use-theme';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
+import { isSameLocalDay, formatDateSeparator } from '@/utils/datetime';
 
 export default function ConversationScreen() {
   const { id, otherDisplayName, otherAvatarUrl } = useLocalSearchParams<{
@@ -89,15 +93,15 @@ export default function ConversationScreen() {
           ci-dessous, pas ici, pour éviter un double espacement quand le
           clavier est ouvert. */}
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ThemedView style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+        <ThemedView style={[styles.header, { borderBottomColor: theme.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
             <ThemedText type="link" themeColor="textSecondary">
               Retour
             </ThemedText>
           </Pressable>
           <ThemedView style={styles.headerIdentity}>
-            <AvatarImage avatarUrl={otherAvatarUrl || null} displayName={otherDisplayName ?? '?'} size={32} />
-            <ThemedText type="smallBold" numberOfLines={1} style={styles.headerTitle}>
+            <AvatarImage avatarUrl={otherAvatarUrl || null} displayName={otherDisplayName ?? '?'} size={36} />
+            <ThemedText type="label" numberOfLines={1} style={styles.headerTitle}>
               {otherDisplayName ?? 'Discussion'}
             </ThemedText>
           </ThemedView>
@@ -124,17 +128,27 @@ export default function ConversationScreen() {
               data={invertedMessages}
               keyExtractor={(item) => item.id}
               inverted
-              renderItem={({ item }) => {
+              renderItem={({ item, index }) => {
                 const isOwnMessage = item.senderId === session?.user.id;
+                const olderNeighbor = invertedMessages[index + 1];
+                const showDateSeparator = !olderNeighbor || !isSameLocalDay(item.createdAt, olderNeighbor.createdAt);
                 return (
-                  <MessageBubble
-                    message={item}
-                    isOwnMessage={isOwnMessage}
-                    onImagePress={setViewerUrl}
-                    deletionState={isOwnMessage ? getDeletionState(item.id) : null}
-                    onDelete={() => deleteMessage(item)}
-                    onRetryDelete={() => retryDeletion(item)}
-                  />
+                  // entering : apparition légère au montage de CETTE ligne
+                  // uniquement (clé stable par message.id) — un message déjà
+                  // affiché ne se ré-anime jamais en scrollant/paginant,
+                  // seul un message réellement nouveau (ou nouvellement
+                  // chargé) déclenche l'animation.
+                  <Animated.View entering={FadeIn.duration(200)}>
+                    {showDateSeparator && <DateSeparator label={formatDateSeparator(item.createdAt)} />}
+                    <MessageBubble
+                      message={item}
+                      isOwnMessage={isOwnMessage}
+                      onImagePress={setViewerUrl}
+                      deletionState={isOwnMessage ? getDeletionState(item.id) : null}
+                      onDelete={() => deleteMessage(item)}
+                      onRetryDelete={() => retryDeletion(item)}
+                    />
+                  </Animated.View>
                 );
               }}
               onEndReached={loadMore}
@@ -154,12 +168,12 @@ export default function ConversationScreen() {
           )}
 
           {sendError && (
-            <ThemedText type="small" style={styles.error}>
+            <ThemedText type="bodySmall" themeColor="danger" style={styles.errorPadding} accessibilityRole="alert">
               {sendError}
             </ThemedText>
           )}
           {mediaError && !pickedMedia && (
-            <ThemedText type="small" style={styles.error}>
+            <ThemedText type="bodySmall" themeColor="danger" style={styles.errorPadding} accessibilityRole="alert">
               {mediaError}
             </ThemedText>
           )}
@@ -177,37 +191,28 @@ export default function ConversationScreen() {
           <ThemedView
             style={[
               styles.inputRow,
+              { borderTopColor: theme.border },
               // Espace la barre de navigation Android (edge-to-edge) quand
               // le clavier est fermé ; jamais en position absolute.
               { paddingBottom: Math.max(insets.bottom, Spacing.two) },
             ]}>
             <ThemedView style={styles.mediaButtons}>
-              <Pressable
+              <Button
+                label="Photo"
                 onPress={pickImage}
                 disabled={!!pickedMedia || isUploadingMedia}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.mediaButton,
-                  { borderColor: theme.backgroundSelected },
-                  (pressed || !!pickedMedia || isUploadingMedia) && styles.pressed,
-                ]}>
-                <ThemedText type="smallBold" themeColor="textSecondary">
-                  Photo
-                </ThemedText>
-              </Pressable>
-              <Pressable
+                variant="secondary"
+                size="small"
+                accessibilityLabel="Ajouter une photo"
+              />
+              <Button
+                label="Vidéo"
                 onPress={pickVideo}
                 disabled={!!pickedMedia || isUploadingMedia}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.mediaButton,
-                  { borderColor: theme.backgroundSelected },
-                  (pressed || !!pickedMedia || isUploadingMedia) && styles.pressed,
-                ]}>
-                <ThemedText type="smallBold" themeColor="textSecondary">
-                  Vidéo
-                </ThemedText>
-              </Pressable>
+                variant="secondary"
+                size="small"
+                accessibilityLabel="Ajouter une vidéo"
+              />
             </ThemedView>
             <TextInput
               placeholder="Écrire un message..."
@@ -219,19 +224,17 @@ export default function ConversationScreen() {
               editable={!isSending}
               returnKeyType="send"
               onSubmitEditing={handleSend}
-              style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+              accessibilityLabel="Message"
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
             />
-            <Pressable
+            <Button
+              label="Envoyer"
               onPress={handleSend}
-              disabled={isSending || !draft.trim()}
-              style={({ pressed }) => [
-                styles.sendButton,
-                (pressed || isSending || !draft.trim()) && styles.pressed,
-              ]}>
-              <ThemedText type="smallBold" style={styles.sendButtonLabel}>
-                {isSending ? '...' : 'Envoyer'}
-              </ThemedText>
-            </Pressable>
+              disabled={!draft.trim()}
+              loading={isSending}
+              size="small"
+              accessibilityLabel="Envoyer le message"
+            />
           </ThemedView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -258,6 +261,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerIdentity: {
     flex: 1,
@@ -287,48 +291,30 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     alignItems: 'center',
   },
+  errorPadding: {
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.one,
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   mediaButtons: {
     flexDirection: 'row',
     gap: Spacing.one,
   },
-  mediaButton: {
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-    justifyContent: 'center',
-  },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
     maxHeight: 120,
-  },
-  sendButton: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    justifyContent: 'center',
-  },
-  sendButtonLabel: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  error: {
-    color: '#D14343',
-    paddingHorizontal: Spacing.three,
+    minHeight: TouchTarget.min,
   },
 });

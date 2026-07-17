@@ -2,6 +2,7 @@ import {
   EMPTY_CONVERSATIONS_COPY,
   LOGIN_COPY,
   REGISTER_COPY,
+  SEARCH_COPY,
   SECURITY_COPY,
   WELCOME_COPY,
 } from '@/constants/copy';
@@ -23,10 +24,15 @@ describe('Textes officiels White Alpha (Phase 7.2)', () => {
   it('aucune conversation', () => {
     expect(EMPTY_CONVERSATIONS_COPY.title).toBe('La meute est encore silencieuse');
     expect(EMPTY_CONVERSATIONS_COPY.description).toBe('Commencez une conversation privée');
+    expect(EMPTY_CONVERSATIONS_COPY.actionLabel).toBe('Nouvelle conversation');
   });
 
   it('sécurité', () => {
     expect(SECURITY_COPY.title).toBe('Votre espace reste protégé');
+  });
+
+  it('recherche', () => {
+    expect(SEARCH_COPY.noResultsTitle).toBe('Aucun membre trouvé');
   });
 
   it('aucun texte ne mentionne Claude', () => {
@@ -37,7 +43,9 @@ describe('Textes officiels White Alpha (Phase 7.2)', () => {
       REGISTER_COPY.title,
       EMPTY_CONVERSATIONS_COPY.title,
       EMPTY_CONVERSATIONS_COPY.description,
+      EMPTY_CONVERSATIONS_COPY.actionLabel,
       SECURITY_COPY.title,
+      SEARCH_COPY.noResultsTitle,
     ].join(' ');
     expect(allText).not.toMatch(/claude/i);
   });

@@ -34,7 +34,7 @@ describe('ConversationsScreen', () => {
     mockUseMyProfile.mockReturnValue(baseMyProfileState());
   });
 
-  it("affiche l'état vide quand l'utilisateur n'a aucune conversation", async () => {
+  it("affiche l'état vide White Alpha quand l'utilisateur n'a aucune conversation", async () => {
     mockUseConversations.mockReturnValue({
       conversations: [],
       isLoading: false,
@@ -45,8 +45,37 @@ describe('ConversationsScreen', () => {
 
     await render(<ConversationsScreen />);
 
-    expect(screen.getByText('Aucune conversation')).toBeTruthy();
-    expect(screen.getByText('Recherchez un utilisateur pour commencer à discuter.')).toBeTruthy();
+    expect(screen.getByText('La meute est encore silencieuse')).toBeTruthy();
+    expect(screen.getByText('Commencez une conversation privée')).toBeTruthy();
+  });
+
+  it("le bouton « Nouvelle conversation » de l'état vide navigue vers /search", async () => {
+    mockUseConversations.mockReturnValue({
+      conversations: [],
+      isLoading: false,
+      isRefreshing: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+
+    await render(<ConversationsScreen />);
+    fireEvent.press(screen.getByText('Nouvelle conversation'));
+
+    expect(router.push).toHaveBeenCalledWith('/search');
+  });
+
+  it('ne contient aucune référence visible à Claude', async () => {
+    mockUseConversations.mockReturnValue({
+      conversations: [],
+      isLoading: false,
+      isRefreshing: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+
+    await render(<ConversationsScreen />);
+
+    expect(screen.queryByText(/claude/i)).toBeNull();
   });
 
   it('affiche un état de chargement pendant la première récupération', async () => {

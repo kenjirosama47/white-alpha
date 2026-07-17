@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import type { PickedMedia } from '@/services/media';
 import { formatDuration, formatFileSize } from '@/utils/format';
 
@@ -28,59 +29,42 @@ export function AttachmentComposerPreview({
   onCancelUpload,
   onSend,
 }: AttachmentComposerPreviewProps) {
+  const theme = useTheme();
+
   return (
-    <ThemedView type="backgroundElement" style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}>
       <View style={styles.row}>
         {media.kind === 'image' ? (
           <Image source={{ uri: media.data.uri }} style={styles.thumbnail} contentFit="cover" />
         ) : (
-          <View style={styles.videoThumbnail}>
-            <ThemedText type="smallBold" style={styles.videoIcon}>
+          <View style={[styles.videoThumbnail, { backgroundColor: theme.surface }]}>
+            <ThemedText type="label" style={styles.videoIcon}>
               ▶
             </ThemedText>
           </View>
         )}
         <View style={styles.actions}>
           {media.kind === 'video' && (
-            <ThemedText type="small" themeColor="textSecondary">
+            <ThemedText type="caption" themeColor="textSecondary">
               {formatDuration(media.data.durationMs ?? 0)}
               {media.data.sizeBytes != null ? ` · ${formatFileSize(media.data.sizeBytes)}` : ''}
             </ThemedText>
           )}
           {error && (
-            <ThemedText type="small" style={styles.error}>
+            <ThemedText type="caption" themeColor="danger">
               {error}
             </ThemedText>
           )}
           <View style={styles.buttonsRow}>
-            <Pressable
-              onPress={onCancel}
-              disabled={isUploading}
-              hitSlop={8}
-              style={({ pressed }) => [styles.button, (pressed || isUploading) && styles.pressed]}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Annuler
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              onPress={onSend}
-              disabled={isUploading}
-              style={({ pressed }) => [styles.button, styles.sendButton, (pressed || isUploading) && styles.pressed]}>
-              {isUploading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <ThemedText type="smallBold" style={styles.sendButtonLabel}>
-                  {/* Un message d'erreur affiché signale une tentative précédente
-                      échouée : ce même bouton relance l'envoi (reprise pour une
-                      vidéo, nouveau chemin Storage pour une photo), sans jamais
-                      redemander le fichier. */}
-                  {error ? 'Réessayer' : 'Envoyer'}
-                </ThemedText>
-              )}
-            </Pressable>
+            <Button label="Annuler" onPress={onCancel} disabled={isUploading} variant="secondary" size="small" />
+            {/* Un message d'erreur affiché signale une tentative précédente
+                échouée : ce même bouton relance l'envoi (reprise pour une
+                vidéo, nouveau chemin Storage pour une photo), sans jamais
+                redemander le fichier. */}
+            <Button label={error ? 'Réessayer' : 'Envoyer'} onPress={onSend} loading={isUploading} size="small" />
             {isUploading && media.kind === 'video' && (
-              <Pressable onPress={onCancelUpload} hitSlop={8} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-                <ThemedText type="smallBold" style={styles.cancelUploadLabel}>
+              <Pressable onPress={onCancelUpload} hitSlop={8} style={({ pressed }) => [styles.cancelUpload, pressed && styles.pressed]}>
+                <ThemedText type="label" themeColor="danger">
                   Annuler l’envoi
                 </ThemedText>
               </Pressable>
@@ -92,11 +76,11 @@ export function AttachmentComposerPreview({
           dans ce cas, voir use-media-upload.ts) : la reprise repartira visiblement
           d'où l'envoi s'est arrêté, pas de 0. */}
       {media.kind === 'video' && uploadProgress != null && (
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+        <View style={[styles.progressTrack, { backgroundColor: theme.border }]}>
+          <View style={[styles.progressFill, { width: `${uploadProgress}%`, backgroundColor: theme.accent }]} />
         </View>
       )}
-    </ThemedView>
+    </View>
   );
 }
 
@@ -104,8 +88,9 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
     marginHorizontal: Spacing.three,
     marginTop: Spacing.two,
   },
@@ -116,15 +101,14 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: 64,
     height: 64,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
   },
   videoThumbnail: {
     width: 64,
     height: 64,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00000029',
   },
   videoIcon: {
     fontSize: 20,
@@ -137,36 +121,22 @@ const styles = StyleSheet.create({
   buttonsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: Spacing.two,
   },
-  button: {
+  cancelUpload: {
     paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  sendButton: {
-    backgroundColor: '#208AEF',
-  },
-  sendButtonLabel: {
-    color: '#ffffff',
-  },
-  cancelUploadLabel: {
-    color: '#D14343',
+    paddingHorizontal: Spacing.two,
   },
   pressed: {
     opacity: 0.6,
   },
-  error: {
-    color: '#D14343',
-  },
   progressTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#00000014',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#208AEF',
   },
 });

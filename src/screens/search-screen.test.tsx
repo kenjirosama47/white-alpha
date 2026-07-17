@@ -51,12 +51,12 @@ describe('SearchScreen', () => {
     expect(screen.queryByText('Aucun utilisateur trouvé')).toBeNull();
   });
 
-  it("affiche « Aucun utilisateur trouvé » distinct de l'état vide initial", async () => {
+  it("affiche « Aucun membre trouvé » distinct de l'état vide initial", async () => {
     mockUseUserSearch.mockReturnValue(baseSearchState({ query: 'zzzzz', results: [] }));
 
     await render(<SearchScreen />);
 
-    expect(screen.getByText('Aucun utilisateur trouvé')).toBeTruthy();
+    expect(screen.getByText('Aucun membre trouvé')).toBeTruthy();
     expect(screen.queryByText('Rechercher un utilisateur')).toBeNull();
   });
 
@@ -68,7 +68,7 @@ describe('SearchScreen', () => {
     await render(<SearchScreen />);
 
     expect(screen.getByText('Impossible de rechercher des utilisateurs pour le moment.')).toBeTruthy();
-    expect(screen.queryByText('Aucun utilisateur trouvé')).toBeNull();
+    expect(screen.queryByText('Aucun membre trouvé')).toBeNull();
   });
 
   it("l'erreur de recherche n'affiche aucun bouton Réessayer (non récupérable depuis cet état)", async () => {
@@ -122,5 +122,52 @@ describe('SearchScreen', () => {
     await waitFor(() =>
       expect(screen.getByText('Impossible de créer la conversation pour le moment.')).toBeTruthy(),
     );
+  });
+
+  it("n'affiche jamais l'email complet ni l'identifiant Supabase brut d'un résultat", async () => {
+    mockUseUserSearch.mockReturnValue(
+      baseSearchState({
+        query: 'bob',
+        results: [{ id: 'u1-uuid-technique', username: 'bob', displayName: 'Bob', avatarUrl: null }],
+      }),
+    );
+
+    await render(<SearchScreen />);
+
+    expect(screen.queryByText(/@.*\.(com|fr|net|org)/i)).toBeNull();
+    expect(screen.queryByText('u1-uuid-technique')).toBeNull();
+  });
+});
+
+describe('SearchScreen — champ de recherche', () => {
+  beforeEach(() => {
+    mockUseUserSearch.mockReset();
+    mockGetOrCreateConversation.mockReset();
+  });
+
+  it('aucun bouton effacer tant que le champ est vide', async () => {
+    mockUseUserSearch.mockReturnValue(baseSearchState({ query: '' }));
+
+    await render(<SearchScreen />);
+
+    expect(screen.queryByLabelText('Effacer la recherche')).toBeNull();
+  });
+
+  it('le bouton effacer vide le champ de recherche', async () => {
+    const setQuery = jest.fn();
+    mockUseUserSearch.mockReturnValue(baseSearchState({ query: 'bob', setQuery }));
+
+    await render(<SearchScreen />);
+    fireEvent.press(screen.getByLabelText('Effacer la recherche'));
+
+    expect(setQuery).toHaveBeenCalledWith('');
+  });
+
+  it('le champ de recherche est accessible', async () => {
+    mockUseUserSearch.mockReturnValue(baseSearchState({ query: '' }));
+
+    await render(<SearchScreen />);
+
+    expect(screen.getByLabelText('Rechercher un membre')).toBeTruthy();
   });
 });

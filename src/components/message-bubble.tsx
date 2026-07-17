@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { MessageImage } from '@/components/message-image';
 import { MessageVideo } from '@/components/message-video';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { MessageDeletionState } from '@/hooks/use-message-deletion';
 import type { Message } from '@/types/chat';
@@ -58,7 +58,7 @@ export function MessageBubble({
         <View
           style={[
             styles.bubble,
-            isOwnMessage ? styles.bubbleOwn : { backgroundColor: theme.backgroundElement },
+            isOwnMessage ? { backgroundColor: theme.accent } : { backgroundColor: theme.surfaceHigh, borderWidth: 1, borderColor: theme.border },
           ]}>
           {message.attachment?.mediaType === 'image' && (
             <MessageImage
@@ -89,7 +89,7 @@ export function MessageBubble({
                     accessibilityLabel="Options du message vidéo"
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.videoMenuButton, pressed && styles.pressed]}>
-                    <ThemedText type="smallBold" style={styles.videoMenuIcon}>
+                    <ThemedText type="label" style={styles.videoMenuIcon}>
                       ⋮
                     </ThemedText>
                   </Pressable>
@@ -100,12 +100,12 @@ export function MessageBubble({
                         onPress={() => setVideoMenuOpen(false)}
                         accessibilityLabel="Fermer le menu"
                       />
-                      <View style={styles.videoMenuDropdown}>
+                      <View style={[styles.videoMenuDropdown, { backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}>
                         <Pressable
                           onPress={handleOpenDeleteFromVideoMenu}
                           hitSlop={8}
                           style={({ pressed }) => [styles.videoMenuItem, pressed && styles.pressed]}>
-                          <ThemedText type="small" style={styles.confirmLabel}>
+                          <ThemedText type="bodySmall" themeColor="danger">
                             Supprimer
                           </ThemedText>
                         </Pressable>
@@ -117,14 +117,14 @@ export function MessageBubble({
             </View>
           )}
           {hasText && (
-            <ThemedText type="default" style={isOwnMessage ? styles.textOwn : undefined}>
+            <ThemedText type="body" style={isOwnMessage ? { color: theme.onAccent } : undefined}>
               {message.content}
             </ThemedText>
           )}
           <ThemedText
-            type="small"
+            type="caption"
             themeColor={isOwnMessage ? undefined : 'textSecondary'}
-            style={[styles.time, isOwnMessage && styles.textOwn]}>
+            style={[styles.time, isOwnMessage && { color: theme.onAccent }]}>
             {formatTime(message.createdAt)}
           </ThemedText>
         </View>
@@ -133,31 +133,31 @@ export function MessageBubble({
           <View style={styles.deleteRow}>
             {deletionState?.status === 'error' ? (
               <>
-                <ThemedText type="small" style={styles.errorText}>
+                <ThemedText type="caption" themeColor="danger">
                   {deletionState.error}
                 </ThemedText>
-                <Pressable onPress={onRetryDelete} hitSlop={8}>
-                  <ThemedText type="small" style={styles.retryLabel}>
+                <Pressable onPress={onRetryDelete} hitSlop={8} accessibilityRole="button" accessibilityLabel="Réessayer la suppression">
+                  <ThemedText type="caption" themeColor="accent">
                     Réessayer
                   </ThemedText>
                 </Pressable>
               </>
             ) : isDeleting ? (
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="caption" themeColor="textSecondary">
                 Suppression…
               </ThemedText>
             ) : confirming ? (
               <>
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="caption" themeColor="textSecondary">
                   Supprimer ce message ?
                 </ThemedText>
-                <Pressable onPress={handleConfirm} hitSlop={8}>
-                  <ThemedText type="small" style={styles.confirmLabel}>
+                <Pressable onPress={handleConfirm} hitSlop={8} accessibilityRole="button" accessibilityLabel="Confirmer la suppression">
+                  <ThemedText type="caption" themeColor="danger">
                     Confirmer
                   </ThemedText>
                 </Pressable>
-                <Pressable onPress={() => setConfirming(false)} hitSlop={8}>
-                  <ThemedText type="small" themeColor="textSecondary">
+                <Pressable onPress={() => setConfirming(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Annuler la suppression">
+                  <ThemedText type="caption" themeColor="textSecondary">
                     Annuler
                   </ThemedText>
                 </Pressable>
@@ -166,8 +166,8 @@ export function MessageBubble({
               // Pour une vidéo, le déclencheur est le menu ⋮ au-dessus (voir
               // videoMenuAnchor) : le lien texte ici serait sous la même
               // zone potentiellement recouverte par le lecteur natif.
-              <Pressable onPress={() => setConfirming(true)} hitSlop={8}>
-                <ThemedText type="small" themeColor="textSecondary">
+              <Pressable onPress={() => setConfirming(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer ce message">
+                <ThemedText type="caption" themeColor="textSecondary">
                   Supprimer
                 </ThemedText>
               </Pressable>
@@ -196,23 +196,13 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   bubble: {
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     gap: Spacing.half,
   },
-  bubbleOwn: {
-    backgroundColor: '#208AEF',
-  },
-  bubbleReceived: {
-    backgroundColor: '#F0F0F3',
-  },
-  textOwn: {
-    color: '#ffffff',
-  },
   time: {
     alignSelf: 'flex-end',
-    fontSize: 11,
   },
   deleteRow: {
     flexDirection: 'row',
@@ -221,15 +211,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingHorizontal: Spacing.one,
-  },
-  confirmLabel: {
-    color: '#D14343',
-  },
-  retryLabel: {
-    color: '#208AEF',
-  },
-  errorText: {
-    color: '#D14343',
   },
   videoWrapper: {
     position: 'relative',
@@ -279,13 +260,9 @@ const styles = StyleSheet.create({
     top: 36,
     right: 0,
     minWidth: 120,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
     paddingVertical: Spacing.half,
-    backgroundColor: '#ffffff',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
     zIndex: 21,
     elevation: 21,
   },

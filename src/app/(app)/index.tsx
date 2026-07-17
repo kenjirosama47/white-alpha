@@ -6,15 +6,20 @@ import { AppEmptyState } from '@/components/app-empty-state';
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { AvatarImage } from '@/components/avatar-image';
+import { Button } from '@/components/button';
 import { ConversationListItem } from '@/components/conversation-list-item';
+import { Divider } from '@/components/divider';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { EMPTY_CONVERSATIONS_COPY } from '@/constants/copy';
+import { MaxContentWidth, Spacing, TouchTarget } from '@/constants/theme';
 import { useConversations } from '@/hooks/use-conversations';
 import { useMyProfile } from '@/hooks/use-my-profile';
+import { useTheme } from '@/hooks/use-theme';
 import type { ConversationSummary } from '@/types/chat';
 
 export default function ConversationsScreen() {
+  const theme = useTheme();
   const { conversations, isLoading, isRefreshing, error, refresh } = useConversations();
   const { profile: myProfile } = useMyProfile();
 
@@ -34,34 +39,32 @@ export default function ConversationsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.header}>
-          <ThemedText type="subtitle">Conversations</ThemedText>
-          <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityLabel="Ouvrir mon profil">
-            <AvatarImage avatarUrl={myProfile?.avatarUrl ?? null} displayName={myProfile?.displayName ?? '?'} size={36} />
+          <ThemedText type="title">Conversations</ThemedText>
+          <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Ouvrir mon profil">
+            <AvatarImage avatarUrl={myProfile?.avatarUrl ?? null} displayName={myProfile?.displayName ?? '?'} size={TouchTarget.comfortable} />
           </Pressable>
         </ThemedView>
 
-        <Pressable
-          onPress={() => router.push('/search')}
-          style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-            Nouvelle discussion
-          </ThemedText>
-        </Pressable>
+        <Button label="Nouvelle discussion" onPress={() => router.push('/search')} />
 
         {isLoading ? (
           <AppLoadingState accessibilityLabel="Chargement des conversations" />
         ) : error ? (
           <AppErrorState description={error} onRetry={refresh} />
         ) : conversations.length === 0 ? (
-          <AppEmptyState title="Aucune conversation" description="Recherchez un utilisateur pour commencer à discuter." />
+          <AppEmptyState
+            title={EMPTY_CONVERSATIONS_COPY.title}
+            description={EMPTY_CONVERSATIONS_COPY.description}
+            actionLabel={EMPTY_CONVERSATIONS_COPY.actionLabel}
+            onAction={() => router.push('/search')}
+          />
         ) : (
           <FlatList
             data={conversations}
             keyExtractor={(item) => item.conversationId}
-            renderItem={({ item }) => (
-              <ConversationListItem conversation={item} onPress={() => openConversation(item)} />
-            )}
-            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
+            renderItem={({ item }) => <ConversationListItem conversation={item} onPress={() => openConversation(item)} />}
+            ItemSeparatorComponent={Divider}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={theme.textSecondary} />}
             contentContainerStyle={styles.listContent}
           />
         )}
@@ -89,19 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: Spacing.two,
   },
-  buttonPrimary: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-  },
-  buttonPrimaryLabel: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
   listContent: {
-    gap: Spacing.one,
+    flexGrow: 1,
   },
 });
