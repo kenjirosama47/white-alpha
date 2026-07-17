@@ -624,6 +624,52 @@ l'audit lui-même.
     (identique au keystore EAS existant, aucune nouvelle clé créée)
   - Phase 5.S3 close.
 
+### Phase 5.S4 — Audit défensif complet RLS/RPC/Storage/autorisations — Terminée et validée
+- Audit systématique des tables exposées (`profiles`, `conversations`,
+  `messages`, `message_attachments` ; aucune table `conversation_members`
+  distincte), des fonctions RPC (SECURITY DEFINER/INVOKER, `search_path`,
+  grants, validation `auth.uid()`, contrôle owner+aal2), de Storage
+  (`chat-media` privé, `avatars` public assumé) et des GRANT (`anon` sans
+  aucun privilège de table ni EXECUTE sur toutes les fonctions
+  applicatives, vérifié exhaustivement).
+- 2 vulnérabilités confirmées et corrigées (gravité moyenne, exploitables
+  uniquement sur ses propres données, jamais un accès inter-utilisateurs) :
+  `messages.message_type` modifiable après création (GRANT UPDATE inutilisé
+  par l'application) et suppression autonome d'une pièce jointe sans
+  supprimer le message parent (GRANT DELETE inutilisé par l'application) —
+  toutes deux confirmées par audit du code client (aucun `.update()` sur
+  `messages`, aucune suppression directe de `message_attachments`).
+  Migration `20260717180000_prevent_message_attachment_inconsistency.sql` :
+  deux triggers (`messages_prevent_type_change_trigger`,
+  `message_attachments_prevent_standalone_delete_trigger`), même principe de
+  défense en profondeur que `messages_prevent_reassign` (Phase 3). Chemin
+  applicatif réel (`delete_own_message`, cascade) vérifié non affecté.
+- Faux positifs écartés (vérifiés empiriquement, pas supposés) : EXECUTE
+  implicite `anon`/`public` sur les fonctions trigger — confirmé non
+  exploitable (`ERROR 0A000: trigger functions can only be called as
+  triggers`) ; fonction `rls_auto_enable` découverte lors de l'audit —
+  event trigger injecté par la plateforme Supabase elle-même (hors
+  périmètre applicatif), pas une vulnérabilité.
+- 22 tests pgTAP ajoutés/adaptés (nouveau fichier
+  `phase5_s4_defensive_audit_test.sql` + adaptation de 2 tests Phase 4A/4B
+  reflétant le nouveau comportement volontaire) : 160/160 assertions
+  passent. `tsc`/`lint`/`db lint` au vert.
+- Migration poussée vers le projet Supabase distant et vérifiée
+  directement : triggers présents et activés, `search_path` fixé, grants
+  inchangés (`anon` toujours à zéro privilège sur `messages`/
+  `message_attachments`). Tests fonctionnels rejoués contre la base
+  distante (comptes de test uniquement, aucune donnée utilisateur réelle
+  touchée) : messagerie normale fonctionnelle, changement de `message_type`
+  refusé, suppression autonome de pièce jointe refusée, suppression
+  complète via `delete_own_message` fonctionnelle, double suppression
+  idempotente. **0 fichier Storage orphelin** confirmé (comparaison directe
+  `storage.objects` vs `message_attachments.storage_path` sur le bucket
+  `chat-media`).
+- Aucun impact sur les données existantes (migration composée uniquement de
+  `CREATE FUNCTION`/`CREATE TRIGGER`, aucun `DROP`/`DELETE`/`UPDATE` de
+  données). Aucun nouvel APK nécessaire (aucun changement côté client
+  mobile). Phase 5.S4 close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
