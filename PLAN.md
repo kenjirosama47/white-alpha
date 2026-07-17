@@ -770,10 +770,8 @@ Phase 6 (non commencée) ou d'une phase corrective dédiée en cas de défaut
 constaté après clôture.
 
 ## Phase 6 — Assistant Claude (écran séparé)
-- Écran dédié, distinct des conversations privées entre utilisateurs.
-- Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
-  stockée uniquement côté serveur, jamais dans l'app mobile).
-- Historique de conversation avec l'assistant, propre à chaque utilisateur.
+
+**Phase 6 Assistant Claude annulée à la demande du propriétaire.**
 
 ## Phase 7 — Durcissement & polish
 - Revue des policies RLS Supabase (accès conversations/messages/médias).
