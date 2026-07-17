@@ -30,6 +30,13 @@ jest.mock('@/lib/secure-session-storage', () => ({
   migrateLegacySessionToSecureStore: (...args: unknown[]) => mockMigrateLegacySessionToSecureStore(...args),
 }));
 
+const mockRegisterForPushNotifications = jest.fn();
+const mockDeactivateCurrentDevicePushToken = jest.fn();
+jest.mock('@/lib/push-notifications', () => ({
+  registerForPushNotificationsAsync: (...args: unknown[]) => mockRegisterForPushNotifications(...args),
+  deactivateCurrentDevicePushTokenAsync: (...args: unknown[]) => mockDeactivateCurrentDevicePushToken(...args),
+}));
+
 const fakeSession = {
   access_token: 'fake-token',
   refresh_token: 'fake-refresh',
@@ -54,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockMigrateLegacySessionToSecureStore.mockResolvedValue(undefined);
   mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: mockUnsubscribe } } });
+  mockDeactivateCurrentDevicePushToken.mockResolvedValue(undefined);
 });
 
 describe('AuthProvider — chargement initial', () => {
@@ -204,5 +212,106 @@ describe('AuthProvider — signOut', () => {
 
     await waitFor(() => expect(screen.getByText('unauthenticated')).toBeTruthy());
     expect(mockClearStoredSession).toHaveBeenCalledWith('sb-testproj-auth-token');
+  });
+});
+
+describe('AuthProvider — cycle de vie du token push', () => {
+  it('session déjà existante au démarrage : tente de (ré)enregistrer le token de cet appareil (best-effort)', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: fakeSession } });
+
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(mockRegisterForPushNotifications).toHaveBeenCalledTimes(1));
+  });
+
+  it('aucune session au démarrage : aucune tentative d\'enregistrement de token', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('loaded')).toBeTruthy());
+    expect(mockRegisterForPushNotifications).not.toHaveBeenCalled();
+  });
+
+  it('signIn réussi : tente d\'enregistrer le token de cet appareil', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockSignInWithPassword.mockResolvedValue({ error: null });
+
+    function SignInConsumer() {
+      const { signIn } = useAuth();
+      return (
+        <Pressable onPress={() => signIn('a@test.local', 'password')}>
+          <Text>connexion</Text>
+        </Pressable>
+      );
+    }
+
+    await render(
+      <AuthProvider>
+        <SignInConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('connexion'));
+      await Promise.resolve();
+    });
+
+    expect(mockRegisterForPushNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('signIn échoué (identifiants invalides) : aucune tentative d\'enregistrement de token', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockSignInWithPassword.mockResolvedValue({ error: { message: 'Invalid login credentials' } });
+
+    function SignInConsumer() {
+      const { signIn } = useAuth();
+      return (
+        <Pressable onPress={() => signIn('a@test.local', 'wrong')}>
+          <Text>connexion</Text>
+        </Pressable>
+      );
+    }
+
+    await render(
+      <AuthProvider>
+        <SignInConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('connexion'));
+      await Promise.resolve();
+    });
+
+    expect(mockRegisterForPushNotifications).not.toHaveBeenCalled();
+  });
+
+  it('signOut : désactive le token de cet appareil avant de terminer la déconnexion', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: fakeSession } });
+    mockSignOut.mockResolvedValue({ error: null });
+
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('authenticated')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Se déconnecter'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('unauthenticated')).toBeTruthy());
+    expect(mockDeactivateCurrentDevicePushToken).toHaveBeenCalledTimes(1);
   });
 });

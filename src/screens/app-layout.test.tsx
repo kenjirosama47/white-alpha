@@ -33,12 +33,13 @@ jest.mock('expo-router', () => {
 });
 
 describe('AppLayout (groupe (app))', () => {
-  it('déclare index, search, profile et conversation/[id], tous dans le même groupe protégé', async () => {
+  it('déclare index, search, profile, notifications et conversation/[id], tous dans le même groupe protégé', async () => {
     await render(<AppLayout />);
 
     expect(screen.getByText('index')).toBeTruthy();
     expect(screen.getByText('search')).toBeTruthy();
     expect(screen.getByText('profile')).toBeTruthy();
+    expect(screen.getByText('notifications')).toBeTruthy();
     expect(screen.getByText('conversation/[id]')).toBeTruthy();
   });
 });

@@ -7,6 +7,8 @@ import { Platform, useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { OfflineBanner } from '@/components/offline-banner';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { useNotificationResponseNavigation } from '@/hooks/use-notification-response';
+import { configureNotificationHandler } from '@/lib/push-notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -25,8 +27,19 @@ if (Platform.OS !== 'web') {
   ScreenCapture.preventScreenCaptureAsync(SCREEN_CAPTURE_KEY);
 }
 
+// Détermine si les notifications s'affichent pendant que l'app est au
+// premier plan, dès le chargement du module — même principe que
+// preventScreenCaptureAsync ci-dessus.
+configureNotificationHandler();
+
 function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+
+  // Ouvre la conversation correspondante lorsqu'une notification est
+  // touchée, avec revalidation systématique de session et d'appartenance
+  // (voir use-notification-response.ts) — jamais à partir des seules
+  // données transportées par la notification.
+  useNotificationResponseNavigation();
 
   useEffect(() => {
     if (Platform.OS === 'web') return;

@@ -114,6 +114,15 @@ describe('ProfileScreen', () => {
     expect(router.back).toHaveBeenCalledTimes(1);
   });
 
+  it('le lien Notifications ouvre l’écran de préférences de notification', async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+    fireEvent.press(screen.getByText('Notifications'));
+
+    expect(router.push).toHaveBeenCalledWith('/notifications');
+  });
+
   it("n'expose jamais d'email d'un autre utilisateur : seule la propre adresse (session) apparaît, dans Paramètres", async () => {
     mockUseMyProfile.mockReturnValue(baseProfileState());
 

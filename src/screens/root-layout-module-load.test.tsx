@@ -24,6 +24,8 @@ jest.mock('expo-splash-screen', () => ({
 
 jest.mock('@/components/animated-icon', () => ({ AnimatedSplashOverlay: () => null }));
 jest.mock('@/components/offline-banner', () => ({ OfflineBanner: () => null }));
+jest.mock('@/lib/push-notifications', () => ({ configureNotificationHandler: jest.fn() }));
+jest.mock('@/hooks/use-notification-response', () => ({ useNotificationResponseNavigation: jest.fn() }));
 jest.mock('@/contexts/auth-context', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({ isAuthenticated: false, isLoading: true }),

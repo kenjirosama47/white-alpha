@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
+import { deactivateCurrentDevicePushTokenAsync, registerForPushNotificationsAsync } from '@/lib/push-notifications';
 import { clearStoredSession, logAuthStorageEvent, migrateLegacySessionToSecureStore } from '@/lib/secure-session-storage';
 import { AUTH_CALLBACK_URL, SESSION_STORAGE_KEY, supabase } from '@/lib/supabase';
 
@@ -58,6 +59,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!isMounted) return;
         setSession(data.session);
         logAuthStorageEvent(data.session ? 'Lecture de session réussie.' : 'Session absente.');
+        // Best-effort, jamais bloquant pour le démarrage : réenregistre ou
+        // réactive le token de cet appareil si une session existe déjà
+        // (permission déjà accordée/refusée précédemment, pas de nouvelle
+        // demande si déjà tranchée — voir requestPushPermissionAsync).
+        if (data.session) void registerForPushNotificationsAsync();
       } catch {
         // Session illisible/corrompue (échec de stockage, pas juste une
         // valeur invalide déjà gérée par le SDK) : jamais de boucle de
@@ -91,6 +97,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       async signIn(email, password) {
         try {
           const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (!error) void registerForPushNotificationsAsync();
           return { error: error ? translateAuthError(error.message) : null };
         } catch {
           logAuthStorageEvent('Connexion échouée (réseau ou stockage).');
@@ -111,6 +118,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       async signOut() {
+        // Désactive uniquement le token de cet appareil, jamais les autres
+        // appareils du même utilisateur — avant même de tenter la
+        // déconnexion distante, pour ne jamais laisser un appareil déconnecté
+        // continuer de recevoir des notifications privées. Best-effort :
+        // n'empêche jamais la déconnexion elle-même en cas d'échec réseau.
+        await deactivateCurrentDevicePushTokenAsync();
+
         try {
           const { error } = await supabase.auth.signOut();
           if (error) {

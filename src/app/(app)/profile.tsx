@@ -126,6 +126,12 @@ function ProfileView({ profile, onEdit }: ProfileViewProps) {
           </ThemedText>
         </Pressable>
 
+        <Pressable onPress={() => router.push('/notifications')} hitSlop={8}>
+          <ThemedText type="link" themeColor="textSecondary">
+            Notifications
+          </ThemedText>
+        </Pressable>
+
         {typeof Constants.expoConfig?.version === 'string' && (
           <ThemedView style={styles.settingsRow}>
             <ThemedText type="small" themeColor="textSecondary">

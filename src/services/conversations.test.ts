@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { getOrCreateConversation, listConversations } from '@/services/conversations';
+import { getConversationForNotification, getOrCreateConversation, listConversations } from '@/services/conversations';
 
 jest.mock('@/lib/supabase', () => ({
   supabase: { rpc: jest.fn(), storage: { from: jest.fn() } },
@@ -109,5 +109,53 @@ describe('listConversations', () => {
 
     expect(mockStorageFrom).toHaveBeenCalledWith('avatars');
     expect(result[0].otherParticipant.avatarUrl).toBe('https://cdn.test/avatars/u2/abc.jpg');
+  });
+});
+
+describe('getConversationForNotification', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+  });
+
+  it("revalide l'appartenance via la RPC dédiée et mappe la ligne retournée", async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          conversation_id: 'c1',
+          other_user_id: 'u2',
+          other_username: 'bob',
+          other_display_name: 'Bob',
+          other_avatar_url: null,
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getConversationForNotification('c1');
+
+    expect(mockRpc).toHaveBeenCalledWith('get_conversation_for_notification', { p_conversation_id: 'c1' });
+    expect(result).toEqual({
+      conversationId: 'c1',
+      id: 'u2',
+      username: 'bob',
+      displayName: 'Bob',
+      avatarUrl: null,
+    });
+  });
+
+  it("retourne null quand l'appelant n'est plus participant (aucune ligne renvoyée), jamais une erreur distinctive", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    const result = await getConversationForNotification('c1');
+
+    expect(result).toBeNull();
+  });
+
+  it('retourne null en cas d\'erreur RPC (ex. session expirée), sans jamais lever une exception vers l\'appelant', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'JWT expired' } });
+
+    const result = await getConversationForNotification('c1');
+
+    expect(result).toBeNull();
   });
 });

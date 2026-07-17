@@ -54,3 +54,39 @@ export async function getOrCreateConversation(targetUserId: string): Promise<str
 
   return data;
 }
+
+type ConversationForNotificationRow = {
+  conversation_id: string;
+  other_user_id: string;
+  other_username: string;
+  other_display_name: string;
+  other_avatar_url: string | null;
+};
+
+/**
+ * Revalide l'appartenance de l'utilisateur courant à `conversationId` avant
+ * de l'ouvrir depuis une notification (jamais à partir des seules données de
+ * la notification elle-même). `null` signifie explicitement "reviens à
+ * Conversations" : accès perdu, conversation supprimée, ou identifiant
+ * invalide — jamais une erreur qui distinguerait ces cas entre eux.
+ */
+export async function getConversationForNotification(
+  conversationId: string,
+): Promise<ConversationSummary['otherParticipant'] & { conversationId: string } | null> {
+  const { data, error } = await supabase.rpc('get_conversation_for_notification', {
+    p_conversation_id: conversationId,
+  });
+
+  if (error) return null;
+
+  const row = (Array.isArray(data) ? data[0] : data) as ConversationForNotificationRow | undefined;
+  if (!row) return null;
+
+  return {
+    conversationId: row.conversation_id,
+    id: row.other_user_id,
+    username: row.other_username,
+    displayName: row.other_display_name,
+    avatarUrl: row.other_avatar_url ? getAvatarPublicUrl(row.other_avatar_url) : null,
+  };
+}
