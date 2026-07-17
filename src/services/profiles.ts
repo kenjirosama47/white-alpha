@@ -5,6 +5,7 @@ import {
   validateSearchQuery,
   validateUsername,
   type PublicProfile,
+  type UserRole,
 } from '@/types/chat';
 import { friendlyRpcError } from '@/utils/errors';
 
@@ -15,6 +16,14 @@ type ProfileRow = {
   /** Chemin Storage dans le bucket `avatars` (jamais une URL complète) — voir migration 20260716140000. */
   avatar_url: string | null;
 };
+
+/**
+ * Ligne `profiles` incluant `role`, uniquement pour son propre profil
+ * (`getMyProfile`) : ni `search_public_profiles` ni `update_my_profile` ne
+ * renvoient cette colonne (voir migration Phase 5.S3 — `role` n'est
+ * exposée qu'en lecture, jamais modifiable via ces RPC).
+ */
+type MyProfileRow = ProfileRow & { role: UserRole };
 
 /** `avatar_url` en base est un CHEMIN Storage, pas une URL : converti ici en URL publique prête à afficher, pour tous les appelants de ce module. */
 function mapProfileRow(row: ProfileRow): PublicProfile {
@@ -30,13 +39,14 @@ function mapProfileRow(row: ProfileRow): PublicProfile {
  * Profil de l'utilisateur connecté : en plus de `PublicProfile`, expose
  * `avatarPath` (le chemin Storage brut, pas l'URL) — nécessaire uniquement
  * pour supprimer son propre ancien avatar après un remplacement réussi
- * (`services/avatars.ts`). Ne jamais exposer `avatarPath` d'un autre
+ * (`services/avatars.ts`) — et `role`, jamais modifiable côté client (voir
+ * migration Phase 5.S3). Ne jamais exposer `avatarPath`/`role` d'un autre
  * utilisateur : cette forme n'est utilisée que pour son propre profil.
  */
-export type MyProfile = PublicProfile & { avatarPath: string | null };
+export type MyProfile = PublicProfile & { avatarPath: string | null; role: UserRole };
 
-function mapMyProfileRow(row: ProfileRow): MyProfile {
-  return { ...mapProfileRow(row), avatarPath: row.avatar_url };
+function mapMyProfileRow(row: MyProfileRow): MyProfile {
+  return { ...mapProfileRow(row), avatarPath: row.avatar_url, role: row.role };
 }
 
 /** Recherche des profils publics via la RPC `search_public_profiles` (jamais d'email). */
@@ -66,7 +76,7 @@ export async function searchProfiles(query: string): Promise<PublicProfile[]> {
 export async function getMyProfile(): Promise<MyProfile> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url')
+    .select('id, username, display_name, avatar_url, role')
     .maybeSingle();
 
   if (error) {
@@ -76,7 +86,7 @@ export async function getMyProfile(): Promise<MyProfile> {
     throw new Error('Profil introuvable.');
   }
 
-  return mapMyProfileRow(data as ProfileRow);
+  return mapMyProfileRow(data as MyProfileRow);
 }
 
 type UpdateMyProfileParams = {
@@ -92,8 +102,12 @@ type UpdateMyProfileParams = {
  * explicite en cas de nom d'utilisateur déjà pris). Validation appliquée ici
  * en plus de la RPC pour un retour immédiat côté UI, mais la RPC reste la
  * seule source de vérité (revalide tout côté serveur).
+ *
+ * Ne renvoie jamais `role` : `update_my_profile` ne l'a jamais pris en
+ * paramètre ni ne le renvoie (voir migration Phase 5.S3) — le rôle ne change
+ * jamais via ce chemin, l'appelant conserve la valeur déjà connue.
  */
-export async function updateMyProfile(params: UpdateMyProfileParams): Promise<MyProfile> {
+export async function updateMyProfile(params: UpdateMyProfileParams): Promise<Omit<MyProfile, 'role'>> {
   const usernameValidation = validateUsername(params.username);
   if (!usernameValidation.ok) {
     throw new Error(usernameValidation.error);
@@ -118,5 +132,5 @@ export async function updateMyProfile(params: UpdateMyProfileParams): Promise<My
     throw new Error('Impossible de mettre à jour le profil pour le moment.');
   }
 
-  return mapMyProfileRow(row);
+  return { ...mapProfileRow(row), avatarPath: row.avatar_url };
 }

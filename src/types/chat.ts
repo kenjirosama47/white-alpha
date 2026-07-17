@@ -5,6 +5,9 @@ export type PublicProfile = {
   avatarUrl: string | null;
 };
 
+/** 'owner' est unique (au plus un compte), jamais modifiable côté client (voir migration Phase 5.S3). */
+export type UserRole = 'user' | 'owner';
+
 export type ConversationSummary = {
   conversationId: string;
   otherParticipant: PublicProfile;

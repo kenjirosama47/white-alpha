@@ -20,6 +20,7 @@ const baseProfile: MyProfile = {
   displayName: 'Kenjiro',
   avatarUrl: 'https://cdn.test/avatars/me/old.jpg',
   avatarPath: 'me/old.jpg',
+  role: 'user',
 };
 
 // Un act() synchrone ne garantit pas le hop d'effet interne à renderHook

@@ -14,6 +14,7 @@ const profileA: MyProfile = {
   displayName: 'Kenjiro',
   avatarUrl: null,
   avatarPath: null,
+  role: 'user',
 };
 
 describe('useMyProfile', () => {

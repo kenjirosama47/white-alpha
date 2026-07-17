@@ -76,27 +76,42 @@ describe('getMyProfile', () => {
     });
   });
 
-  it('retourne le profil connecté avec avatarPath en plus de avatarUrl', async () => {
+  it('retourne le profil connecté avec avatarPath et role en plus de avatarUrl', async () => {
+    const select = jest.fn().mockReturnValue({ maybeSingle });
+    mockFrom.mockReturnValue({ select });
     maybeSingle.mockResolvedValue({
-      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: 'me/abc.jpg' },
+      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: 'me/abc.jpg', role: 'user' },
       error: null,
     });
 
     const result = await getMyProfile();
 
     expect(mockFrom).toHaveBeenCalledWith('profiles');
+    expect(select).toHaveBeenCalledWith('id, username, display_name, avatar_url, role');
     expect(result).toEqual({
       id: 'me',
       username: 'kenjiro47',
       displayName: 'Kenjiro',
       avatarUrl: 'https://cdn.test/avatars/me/abc.jpg',
       avatarPath: 'me/abc.jpg',
+      role: 'user',
     });
   });
 
-  it("n'expose jamais d'email : seules id/username/display_name/avatar_url sont lues", async () => {
+  it('retourne role: owner quand le profil connecté est le owner', async () => {
     maybeSingle.mockResolvedValue({
-      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null },
+      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null, role: 'owner' },
+      error: null,
+    });
+
+    const result = await getMyProfile();
+
+    expect(result.role).toBe('owner');
+  });
+
+  it("n'expose jamais d'email : seules id/username/display_name/avatar_url/role sont lues", async () => {
+    maybeSingle.mockResolvedValue({
+      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null, role: 'user' },
       error: null,
     });
 
@@ -182,6 +197,18 @@ describe('updateMyProfile', () => {
       avatarUrl: 'https://cdn.test/avatars/me/new.jpg',
       avatarPath: 'me/new.jpg',
     });
+  });
+
+  it('ne renvoie jamais de champ role (jamais modifiable via update_my_profile, voir migration Phase 5.S3)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null }],
+      error: null,
+    });
+
+    const result = await updateMyProfile({ username: 'kenjiro47', displayName: 'Kenjiro' });
+
+    expect(result).not.toHaveProperty('role');
+    expect(mockRpc).toHaveBeenCalledWith('update_my_profile', expect.not.objectContaining({ role: expect.anything(), p_role: expect.anything() }));
   });
 
   it("remonte le message français d'un nom d'utilisateur déjà pris (SQLSTATE P0001)", async () => {

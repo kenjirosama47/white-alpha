@@ -557,6 +557,42 @@ l'audit lui-même.
     (identique au keystore EAS existant, aucune nouvelle clé créée)
   - Phase 5.S2 close.
 
+### Phase 5.S3 — Rôle propriétaire unique et MFA TOTP — Validée localement, migration distante non poussée
+- Audit préalable du schéma existant (`auth.users`, `profiles`,
+  `conversations`, `messages`, `message_attachments`, RPC, triggers,
+  policies RLS, grants) : confirmé qu'il n'existe pas de table
+  `conversation_members` séparée (modèle 1-to-1 strict via `user_a`/`user_b`
+  sur `conversations`) et qu'aucune notion de rôle n'existait auparavant.
+- Migration `20260717150000_owner_role_and_mfa.sql` : colonne `role`
+  (`'user'` par défaut, `'owner'` unique) sur `profiles`, index unique
+  partiel garantissant au plus un owner, GRANT UPDATE de colonne restreint
+  (`username, display_name, avatar_url` uniquement — `role` exclu) doublé
+  d'un trigger `profiles_prevent_role_change` bloquant tout changement de
+  rôle quel que soit le chemin. Fonctions internes `is_owner()`/
+  `current_aal()`/`is_owner_aal2()` (search_path fixé, aucun GRANT EXECUTE
+  client) et première fonction owner sensible de référence
+  `owner_get_platform_stats()`, gated `is_owner_aal2()`. Aucune nouvelle
+  table pour le MFA : entièrement porté par le schéma interne
+  `auth.mfa_*` de Supabase Auth via `supabase.auth.mfa.*`.
+- Attribution du owner volontairement **absente** de la migration : aucun
+  UUID ni email codé en dur, procédure manuelle documentée (trigger
+  désactivé le temps d'un `UPDATE` ponctuel, hors application).
+- Client : `src/lib/mfa.ts` (wrapper `auth.mfa.*`, aucune valeur sensible
+  journalisée), `src/hooks/use-mfa.ts` (statut AAL/facteurs, enrôlement,
+  revérification obligatoire avant désactivation), écran
+  `src/app/(app)/security.tsx` (badge Propriétaire, QR code affiché
+  uniquement pendant l'enrôlement, déconnexion automatique si l'état MFA
+  devient incohérent). FLAG_SECURE hérité automatiquement du groupe
+  `(app)` (Phase 5.S2), aucune configuration supplémentaire nécessaire.
+- 23 tests pgTAP ajoutés (rôle par défaut, contrainte, unicité owner,
+  trigger, GRANT de colonne, refus anon/user/owner-aal1, autorisation
+  owner-aal2, non-régression messagerie pour `user` et `owner`) : 138/138
+  assertions passent. Tests Jest (`use-mfa`, `lib/mfa`, écran Sécurité,
+  service profils) : 377/377 tests passent. `tsc`/`lint`/`db lint` au vert.
+- **Non encore fait** : migration non poussée en distant, aucun owner
+  réellement attribué, aucun test MFA de bout en bout (nécessite un
+  enrôlement TOTP réel), aucun nouvel APK. Phase 5.S3 non close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`

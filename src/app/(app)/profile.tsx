@@ -120,6 +120,12 @@ function ProfileView({ profile, onEdit }: ProfileViewProps) {
           <ThemedText type="small">{session?.user.email ?? 'Connecté'}</ThemedText>
         </ThemedView>
 
+        <Pressable onPress={() => router.push('/security')} hitSlop={8}>
+          <ThemedText type="link" themeColor="textSecondary">
+            Sécurité du compte
+          </ThemedText>
+        </Pressable>
+
         {typeof Constants.expoConfig?.version === 'string' && (
           <ThemedView style={styles.settingsRow}>
             <ThemedText type="small" themeColor="textSecondary">
