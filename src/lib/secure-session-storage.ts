@@ -3,13 +3,16 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import type { SupportedStorage } from '@supabase/supabase-js';
 
+import { logDebugEvent } from '@/lib/logger';
+
 /**
  * Journal générique pour les événements de stockage de session : jamais de
  * jeton, de session complète, de mot de passe ni de détail interne — une
- * catégorie fixe uniquement (Phase 5.S1, section 9).
+ * catégorie fixe uniquement (Phase 5.S1, section 9). Désactivé en Release
+ * (voir `logDebugEvent`, Phase 5.S5).
  */
 export function logAuthStorageEvent(category: string): void {
-  console.log(`[White Alpha][auth-storage] ${category}`);
+  logDebugEvent(`[White Alpha][auth-storage] ${category}`);
 }
 
 const MIGRATION_MARKER_SUFFIX = '-migrated-v1';
