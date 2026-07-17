@@ -670,6 +670,53 @@ l'audit lui-même.
   données). Aucun nouvel APK nécessaire (aucun changement côté client
   mobile). Phase 5.S4 close.
 
+### Phase 5.S5 — Durcissement Android, réseau et surface d'attaque de l'APK — Terminée et validée
+- Audit complet du manifeste Android fusionné Release : 2 vulnérabilités
+  confirmées et corrigées (gravité haute et moyenne, exploitables uniquement
+  via bypass de l'app, jamais un accès inter-utilisateurs) — `FLAG_SECURE`
+  non propagé à la lecture vidéo plein écran (`expo-video`
+  `FullscreenPlayerActivity`, une Activity Android distincte de
+  `MainActivity` avec sa propre fenêtre) et Picture-in-Picture codé en dur
+  par `expo-video` indépendamment de la configuration `app.json`. Permission
+  `SYSTEM_ALERT_WINDOW` inutilisée (modèle par défaut d'Expo) retirée.
+- Correctifs rendus **reproductibles** via un config plugin Expo local
+  (`plugins/withAndroidHardening.js`, référencé dans `app.json`) : FLAG_SECURE
+  appliqué par défaut à toute Activity créée dans le process
+  (`MainApplication.kt`), Network Security Config (cleartext interdit,
+  certificats système uniquement), retrait de `SYSTEM_ALERT_WINDOW`,
+  désactivation du PiP sur `FullscreenPlayerActivity`. Vérifié idempotent
+  sur deux `expo prebuild --clean` consécutifs, aucune intervention
+  manuelle nécessaire.
+- `expo-dev-client` définitivement retiré du dépôt principal : le workflow
+  local est désormais aligné à 100 % avec le build Release (plus de
+  worktree jetable nécessaire pour produire un APK autonome).
+- Nouvelle abstraction de journalisation (`src/lib/logger.ts`) : désactive
+  `console.log` en Release (`__DEV__`), comportement dev inchangé. Audit
+  statique du code source ajouté en test (absence de cleartext/localhost/
+  ws:// codés en dur), complétant l'inspection du bundle compilé.
+- R8/minification activés et validés (build réel, aucune règle ProGuard
+  supplémentaire nécessaire, ~10 % de réduction de taille).
+- Recommandation motivée sur le certificate pinning : **non implémenté**
+  (certificat Google Trust Services à rotation automatisée ~90 jours, risque
+  de blocage de l'app disproportionné par rapport au gain pour ce modèle de
+  menace).
+- **Test manuel — Terminé et validé**, sur téléphone réel avec l'APK Release
+  autonome durci (build 14) : ouverture directe, connexion Supabase,
+  Conversations, Recherche, Discussion, Profil, rôle propriétaire et MFA
+  conservés, envoi message/photo/vidéo, suppression, capture bloquée sur
+  écran privé, aperçu des applications récentes masqué, arrière-plan/premier
+  plan, fermeture et réouverture — aucun plantage.
+- Métadonnées non sensibles de l'APK validé :
+  - fichier : `release-local/WHITEALPHA_RELEASE_AUTONOME_BUILD14_SECURISE.apk`
+  - taille : 96 659 968 octets
+  - SHA-256 : `74aa0204eb69dae9293a25d4a74b5427139419c063236db78e3ae50b5de06498`
+  - package : `com.kenjiro.whitealpha`
+  - versionCode : 14
+  - empreinte publique du certificat (SHA-256) :
+    `c6c357d42b766c7e3d1fc0c9f8e9b9f2ce4fd0e8ed1afe63bf008799d3a09aee`
+    (identique au keystore EAS existant, aucune nouvelle clé créée)
+  - Phase 5.S5 close.
+
 ## Phase 6 — Assistant Claude (écran séparé)
 - Écran dédié, distinct des conversations privées entre utilisateurs.
 - Appel à l'API Anthropic via une **Supabase Edge Function** (clé `ANTHROPIC_API_KEY`
