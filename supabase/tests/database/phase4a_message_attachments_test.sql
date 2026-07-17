@@ -4,7 +4,7 @@
 -- Ne jamais exécuter contre le projet distant.
 
 begin;
-select plan(26);
+select plan(27);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures : 3 utilisateurs de test (A, B, C non membre de la conversation
@@ -283,16 +283,26 @@ select is(
   'B ne peut pas supprimer la pièce jointe de A : elle existe toujours'
 );
 
--- 25. A (uploader) peut supprimer sa propre pièce jointe.
+-- 25. A (uploader) ne peut plus supprimer sa pièce jointe isolément depuis la
+--     Phase 5.S4 (message_attachments_prevent_standalone_delete_trigger) :
+--     seule la suppression du message parent (delete_own_message, testée en
+--     26) est autorisée, pour ne jamais laisser un message 'image'/'video'
+--     sans média associé. La policy DELETE (uploader uniquement) reste utile
+--     comme première barrière (test 24 ci-dessus), mais ne permet plus, à
+--     elle seule, une suppression isolée réussie.
 set local "request.jwt.claim.sub" = 'a1000000-0000-0000-0000-00000000000a';
 set local "request.jwt.claims" = '{"sub":"a1000000-0000-0000-0000-00000000000a","role":"authenticated"}';
 
-delete from public.message_attachments where id = (select attachment_id from t_img);
+select throws_ok(
+  $$ delete from public.message_attachments where id = (select attachment_id from t_img) $$,
+  'Une pièce jointe ne peut être supprimée qu''en supprimant le message correspondant.',
+  'A (uploader) ne peut pas supprimer sa pièce jointe isolément tant que le message existe (Phase 5.S4)'
+);
 
 select is(
   (select count(*) from public.message_attachments where id = (select attachment_id from t_img)),
-  0::bigint,
-  'A (uploader) peut supprimer sa propre pièce jointe'
+  1::bigint,
+  'La pièce jointe de A existe toujours après la tentative de suppression isolée refusée'
 );
 
 -- 26. Supprimer le message supprime sa pièce jointe en cascade.

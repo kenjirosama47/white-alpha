@@ -3,7 +3,7 @@
 -- Ne jamais exécuter contre le projet distant.
 
 begin;
-select plan(20);
+select plan(21);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures : 3 utilisateurs de test (A, B, C non membre de la conversation
@@ -213,16 +213,23 @@ select is(
   'B ne peut pas supprimer la pièce jointe vidéo de A : elle existe toujours'
 );
 
--- 18. A (uploader) peut supprimer sa propre pièce jointe vidéo.
+-- 18. A (uploader) ne peut plus supprimer sa pièce jointe vidéo isolément
+--     depuis la Phase 5.S4 (message_attachments_prevent_standalone_delete_trigger),
+--     même principe que pour une photo (Phase 4A, test 25) : seule la
+--     suppression du message parent (test 19) est autorisée.
 set local "request.jwt.claim.sub" = 'aa000000-0000-0000-0000-0000000000aa';
 set local "request.jwt.claims" = '{"sub":"aa000000-0000-0000-0000-0000000000aa","role":"authenticated"}';
 
-delete from public.message_attachments where id = (select attachment_id from t_vid);
+select throws_ok(
+  $$ delete from public.message_attachments where id = (select attachment_id from t_vid) $$,
+  'Une pièce jointe ne peut être supprimée qu''en supprimant le message correspondant.',
+  'A (uploader) ne peut pas supprimer sa pièce jointe vidéo isolément tant que le message existe (Phase 5.S4)'
+);
 
 select is(
   (select count(*) from public.message_attachments where id = (select attachment_id from t_vid)),
-  0::bigint,
-  'A (uploader) peut supprimer sa propre pièce jointe vidéo'
+  1::bigint,
+  'La pièce jointe vidéo de A existe toujours après la tentative de suppression isolée refusée'
 );
 
 -- 19. Supprimer le message vidéo supprime sa pièce jointe en cascade.
