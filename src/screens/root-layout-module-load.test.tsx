@@ -26,13 +26,11 @@ jest.mock('@/components/animated-icon', () => ({ AnimatedSplashOverlay: () => nu
 jest.mock('@/components/offline-banner', () => ({ OfflineBanner: () => null }));
 jest.mock('@/lib/push-notifications', () => ({ configureNotificationHandler: jest.fn() }));
 jest.mock('@/hooks/use-notification-response', () => ({ useNotificationResponseNavigation: jest.fn() }));
-jest.mock('@expo-google-fonts/inter', () => ({
-  Inter_400Regular: 'Inter_400Regular',
-  Inter_500Medium: 'Inter_500Medium',
-  Inter_600SemiBold: 'Inter_600SemiBold',
-  Inter_700Bold: 'Inter_700Bold',
-  useFonts: () => [true, null],
-}));
+jest.mock('@expo-google-fonts/inter/400Regular', () => ({ Inter_400Regular: 'Inter_400Regular' }));
+jest.mock('@expo-google-fonts/inter/500Medium', () => ({ Inter_500Medium: 'Inter_500Medium' }));
+jest.mock('@expo-google-fonts/inter/600SemiBold', () => ({ Inter_600SemiBold: 'Inter_600SemiBold' }));
+jest.mock('@expo-google-fonts/inter/700Bold', () => ({ Inter_700Bold: 'Inter_700Bold' }));
+jest.mock('@expo-google-fonts/inter/useFonts', () => ({ useFonts: () => [true, null] }));
 jest.mock('@/contexts/auth-context', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({ isAuthenticated: false, isLoading: true }),

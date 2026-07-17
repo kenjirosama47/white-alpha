@@ -49,13 +49,11 @@ jest.mock('@/hooks/use-notification-response', () => ({
   useNotificationResponseNavigation: jest.fn(),
 }));
 
-jest.mock('@expo-google-fonts/inter', () => ({
-  Inter_400Regular: 'Inter_400Regular',
-  Inter_500Medium: 'Inter_500Medium',
-  Inter_600SemiBold: 'Inter_600SemiBold',
-  Inter_700Bold: 'Inter_700Bold',
-  useFonts: () => [true, null],
-}));
+jest.mock('@expo-google-fonts/inter/400Regular', () => ({ Inter_400Regular: 'Inter_400Regular' }));
+jest.mock('@expo-google-fonts/inter/500Medium', () => ({ Inter_500Medium: 'Inter_500Medium' }));
+jest.mock('@expo-google-fonts/inter/600SemiBold', () => ({ Inter_600SemiBold: 'Inter_600SemiBold' }));
+jest.mock('@expo-google-fonts/inter/700Bold', () => ({ Inter_700Bold: 'Inter_700Bold' }));
+jest.mock('@expo-google-fonts/inter/useFonts', () => ({ useFonts: () => [true, null] }));
 
 const mockUseAuth = jest.fn();
 jest.mock('@/contexts/auth-context', () => ({

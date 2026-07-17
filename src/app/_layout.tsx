@@ -1,4 +1,15 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from '@expo-google-fonts/inter';
+// Imports ciblés par poids (jamais le barrel `@expo-google-fonts/inter`) :
+// l'index du package réexporte les 18 variantes (regular/italic × 9 graisses)
+// de façon non arborescente (`export const X = require(...)` à plat) — un
+// import du barrel embarque donc les 18 fichiers .ttf (~6 Mo) même en ne
+// destructurant que 4 symboles, Metro ne pouvant pas élaguer ces requires
+// exécutés au chargement du module. `useFonts` importé séparément : c'est un
+// wrapper autonome autour de `expo-font`, sans dépendance aux polices.
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { useFonts } from '@expo-google-fonts/inter/useFonts';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useEffect } from 'react';
 import * as ScreenCapture from 'expo-screen-capture';
