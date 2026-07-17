@@ -34,6 +34,8 @@ const baseProfile = {
   displayName: 'Kenjiro',
   avatarUrl: null,
   avatarPath: null,
+  avatarPreset: 'wolf_white_calm' as const,
+  role: 'user' as const,
 };
 
 function baseProfileState(overrides: Partial<ReturnType<typeof mockUseMyProfile>> = {}) {
@@ -121,6 +123,39 @@ describe('ProfileScreen', () => {
     fireEvent.press(screen.getByText('Notifications'));
 
     expect(router.push).toHaveBeenCalledWith('/notifications');
+  });
+
+  it('le bouton « Choisir un avatar » ouvre la galerie de sélection', async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+    fireEvent.press(screen.getByText('Choisir un avatar'));
+
+    expect(router.push).toHaveBeenCalledWith('/avatar-gallery');
+  });
+
+  it("affiche le badge « Propriétaire » uniquement pour un compte owner", async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState({ profile: { ...baseProfile, role: 'owner' } }));
+
+    await render(<ProfileScreen />);
+
+    expect(screen.getByText('Propriétaire')).toBeTruthy();
+  });
+
+  it("n'affiche aucun badge « Propriétaire » pour un compte utilisateur normal", async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+
+    expect(screen.queryByText('Propriétaire')).toBeNull();
+  });
+
+  it('ne contient aucune référence visible à Claude', async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+
+    expect(screen.queryByText(/claude/i)).toBeNull();
   });
 
   it("n'expose jamais d'email d'un autre utilisateur : seule la propre adresse (session) apparaît, dans Paramètres", async () => {

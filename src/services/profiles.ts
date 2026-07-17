@@ -1,3 +1,4 @@
+import { DEFAULT_WOLF_AVATAR_ID, isWolfAvatarId, type WolfAvatarId } from '@/constants/avatars';
 import { getAvatarPublicUrl } from '@/services/avatars';
 import { supabase } from '@/lib/supabase';
 import {
@@ -15,6 +16,8 @@ type ProfileRow = {
   display_name: string;
   /** Chemin Storage dans le bucket `avatars` (jamais une URL complète) — voir migration 20260716140000. */
   avatar_url: string | null;
+  /** Identifiant loup prédéfini (Phase 7.5) — toujours l'un des 9 officiels côté base (contrainte CHECK), revalidé ici en repli défensif. */
+  avatar_preset: string;
 };
 
 /**
@@ -25,13 +28,20 @@ type ProfileRow = {
  */
 type MyProfileRow = ProfileRow & { role: UserRole };
 
-/** `avatar_url` en base est un CHEMIN Storage, pas une URL : converti ici en URL publique prête à afficher, pour tous les appelants de ce module. */
+/**
+ * `avatar_url` en base est un CHEMIN Storage, pas une URL : converti ici en
+ * URL publique prête à afficher, pour tous les appelants de ce module.
+ * `avatar_preset` est revalidé côté client (repli sur la valeur par défaut
+ * si jamais une valeur inattendue arrivait malgré la contrainte CHECK côté
+ * base — défense en profondeur, jamais censé se produire en pratique).
+ */
 function mapProfileRow(row: ProfileRow): PublicProfile {
   return {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url ? getAvatarPublicUrl(row.avatar_url) : null,
+    avatarPreset: isWolfAvatarId(row.avatar_preset) ? row.avatar_preset : DEFAULT_WOLF_AVATAR_ID,
   };
 }
 
@@ -76,7 +86,7 @@ export async function searchProfiles(query: string): Promise<PublicProfile[]> {
 export async function getMyProfile(): Promise<MyProfile> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, role')
+    .select('id, username, display_name, avatar_url, avatar_preset, role')
     .maybeSingle();
 
   if (error) {
@@ -103,11 +113,16 @@ type UpdateMyProfileParams = {
  * en plus de la RPC pour un retour immédiat côté UI, mais la RPC reste la
  * seule source de vérité (revalide tout côté serveur).
  *
- * Ne renvoie jamais `role` : `update_my_profile` ne l'a jamais pris en
- * paramètre ni ne le renvoie (voir migration Phase 5.S3) — le rôle ne change
- * jamais via ce chemin, l'appelant conserve la valeur déjà connue.
+ * Ne renvoie jamais `role` ni `avatarPreset` : `update_my_profile` ne les a
+ * jamais pris en paramètre ni ne les renvoie (le rôle depuis la Phase 5.S3,
+ * `avatarPreset` depuis son introduction Phase 7.5, volontairement via une
+ * RPC dédiée `update_my_avatar_preset` — voir plus bas) — ni l'un ni l'autre
+ * ne changent jamais via ce chemin, l'appelant conserve les valeurs déjà
+ * connues.
  */
-export async function updateMyProfile(params: UpdateMyProfileParams): Promise<Omit<MyProfile, 'role'>> {
+export async function updateMyProfile(
+  params: UpdateMyProfileParams,
+): Promise<Omit<MyProfile, 'role' | 'avatarPreset'>> {
   const usernameValidation = validateUsername(params.username);
   if (!usernameValidation.ok) {
     throw new Error(usernameValidation.error);
@@ -127,10 +142,44 @@ export async function updateMyProfile(params: UpdateMyProfileParams): Promise<Om
     throw new Error(friendlyRpcError(error, 'Impossible de mettre à jour le profil pour le moment.'));
   }
 
-  const row = (Array.isArray(data) ? data[0] : data) as ProfileRow | undefined;
+  // `update_my_profile` ne renvoie pas `avatar_preset` (signature Phase 5.1
+  // inchangée, non touchée par la Phase 7.5) : ce type reflète exactement ce
+  // que la RPC renvoie réellement, pour ne jamais construire un `avatarPreset`
+  // à partir d'une colonne absente de la réponse.
+  const row = (Array.isArray(data) ? data[0] : data) as Omit<ProfileRow, 'avatar_preset'> | undefined;
   if (!row) {
     throw new Error('Impossible de mettre à jour le profil pour le moment.');
   }
 
-  return { ...mapProfileRow(row), avatarPath: row.avatar_url };
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url ? getAvatarPublicUrl(row.avatar_url) : null,
+    avatarPath: row.avatar_url,
+  };
+}
+
+/**
+ * Met à jour l'avatar loup prédéfini via la RPC dédiée `update_my_avatar_preset`
+ * (jamais d'UPDATE direct — aucun GRANT sur cette colonne, voir migration
+ * Phase 7.5). Le typage `WolfAvatarId` du paramètre empêche déjà tout envoi
+ * d'une valeur hors catalogue depuis l'app ; la RPC revalide malgré tout côté
+ * serveur (contrainte CHECK en dernier rempart).
+ */
+export async function updateMyAvatarPreset(avatarPreset: WolfAvatarId): Promise<WolfAvatarId> {
+  const { data, error } = await supabase.rpc('update_my_avatar_preset', {
+    p_avatar_preset: avatarPreset,
+  });
+
+  if (error) {
+    throw new Error(friendlyRpcError(error, "Impossible de mettre à jour l'avatar pour le moment."));
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as { id: string; avatar_preset: string } | undefined;
+  if (!row || !isWolfAvatarId(row.avatar_preset)) {
+    throw new Error("Impossible de mettre à jour l'avatar pour le moment.");
+  }
+
+  return row.avatar_preset;
 }

@@ -20,6 +20,7 @@ const baseProfile: MyProfile = {
   displayName: 'Kenjiro',
   avatarUrl: 'https://cdn.test/avatars/me/old.jpg',
   avatarPath: 'me/old.jpg',
+  avatarPreset: 'wolf_white_calm',
   role: 'user',
 };
 

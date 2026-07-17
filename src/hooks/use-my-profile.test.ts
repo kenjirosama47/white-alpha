@@ -14,6 +14,7 @@ const profileA: MyProfile = {
   displayName: 'Kenjiro',
   avatarUrl: null,
   avatarPath: null,
+  avatarPreset: 'wolf_white_calm',
   role: 'user',
 };
 

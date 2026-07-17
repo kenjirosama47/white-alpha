@@ -28,6 +28,7 @@ const userProfile = {
   displayName: 'Kenjiro',
   avatarUrl: null,
   avatarPath: null,
+  avatarPreset: 'wolf_white_calm' as const,
   role: 'user' as const,
 };
 

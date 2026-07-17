@@ -28,14 +28,14 @@ async function emitNetworkChange(
 
 const conversationA: ConversationSummary = {
   conversationId: 'c1',
-  otherParticipant: { id: 'u2', username: 'bob', displayName: 'Bob', avatarUrl: null },
+  otherParticipant: { id: 'u2', username: 'bob', displayName: 'Bob', avatarUrl: null, avatarPreset: 'wolf_white_calm' },
   lastMessageContent: 'Salut',
   lastMessageCreatedAt: '2026-07-15T10:00:00Z',
 };
 
 const conversationB: ConversationSummary = {
   conversationId: 'c2',
-  otherParticipant: { id: 'u3', username: 'alice', displayName: 'Alice', avatarUrl: null },
+  otherParticipant: { id: 'u3', username: 'alice', displayName: 'Alice', avatarUrl: null, avatarPreset: 'wolf_white_calm' },
   lastMessageContent: 'Yo',
   lastMessageCreatedAt: '2026-07-15T11:00:00Z',
 };

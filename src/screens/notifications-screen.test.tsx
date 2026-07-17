@@ -61,6 +61,14 @@ describe('NotificationsScreen — chargement et erreur', () => {
 });
 
 describe('NotificationsScreen — contenu et confidentialité', () => {
+  it("ne contient aucune référence visible à Claude", async () => {
+    mockUseNotificationPreferences.mockReturnValue(preferencesState());
+
+    await render(<NotificationsScreen />);
+
+    expect(screen.queryByText(/claude/i)).toBeNull();
+  });
+
   it('affiche le rappel de contenu générique par défaut', async () => {
     mockUseNotificationPreferences.mockReturnValue(preferencesState());
 

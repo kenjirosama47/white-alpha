@@ -53,9 +53,15 @@ export const DEFAULT_WOLF_AVATAR_ID: WolfAvatarId = 'wolf_white_calm';
  * asset manquant.
  */
 const WOLF_AVATAR_SOURCES: Partial<Record<WolfAvatarId, number>> = {
-  // wolf_white_calm: require('../../assets/images/avatars/wolf_white_calm.png'),
-  // wolf_grey: require('../../assets/images/avatars/wolf_grey.png'),
-  // ... complété en Phase 7.2/7.5, une entrée par loup du catalogue.
+  wolf_white_calm: require('../../assets/images/avatars/wolf_white_calm.png'),
+  wolf_grey: require('../../assets/images/avatars/wolf_grey.png'),
+  wolf_black: require('../../assets/images/avatars/wolf_black.png'),
+  wolf_brown: require('../../assets/images/avatars/wolf_brown.png'),
+  wolf_snow: require('../../assets/images/avatars/wolf_snow.png'),
+  wolf_green_eye: require('../../assets/images/avatars/wolf_green_eye.png'),
+  wolf_young: require('../../assets/images/avatars/wolf_young.png'),
+  wolf_guardian: require('../../assets/images/avatars/wolf_guardian.png'),
+  wolf_alpha: require('../../assets/images/avatars/wolf_alpha.png'),
 };
 
 export function resolveWolfAvatarSource(id: WolfAvatarId | null | undefined): number | null {

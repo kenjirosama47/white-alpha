@@ -8,6 +8,7 @@ export default function AppLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="search" />
       <Stack.Screen name="profile" />
+      <Stack.Screen name="avatar-gallery" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="conversation/[id]" />
     </Stack>

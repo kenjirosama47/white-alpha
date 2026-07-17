@@ -34,9 +34,9 @@ describe('Catalogue des avatars loups (Phase 7.1 — architecture uniquement)', 
     expect(getWolfAvatarLabel('wolf_green_eye')).toBe('Loup au regard vert');
   });
 
-  it("resolveWolfAvatarSource renvoie null tant qu'aucune image définitive n'est fournie (Phase 7.1)", () => {
+  it('resolveWolfAvatarSource renvoie une source non nulle pour les 9 identifiants officiels (Phase 7.5 complète)', () => {
     for (const entry of WOLF_AVATAR_CATALOG) {
-      expect(resolveWolfAvatarSource(entry.id)).toBeNull();
+      expect(resolveWolfAvatarSource(entry.id)).not.toBeNull();
     }
   });
 

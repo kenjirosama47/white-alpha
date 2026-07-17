@@ -5,7 +5,7 @@ import type { ConversationSummary } from '@/types/chat';
 
 const conversation: ConversationSummary = {
   conversationId: 'conv-1',
-  otherParticipant: { id: 'u1', username: 'bob', displayName: 'Bob', avatarUrl: null },
+  otherParticipant: { id: 'u1', username: 'bob', displayName: 'Bob', avatarUrl: null, avatarPreset: 'wolf_white_calm' },
   lastMessageContent: 'Salut !',
   lastMessageCreatedAt: '2026-07-16T10:00:00Z',
 };

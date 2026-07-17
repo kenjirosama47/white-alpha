@@ -62,6 +62,7 @@ describe('listConversations', () => {
           other_username: 'bob',
           other_display_name: 'Bob',
           other_avatar_url: null,
+          other_avatar_preset: 'wolf_grey',
           last_message_content: 'Salut',
           last_message_created_at: '2026-07-15T10:00:00Z',
         },
@@ -74,7 +75,7 @@ describe('listConversations', () => {
     expect(result).toEqual([
       {
         conversationId: 'c1',
-        otherParticipant: { id: 'u2', username: 'bob', displayName: 'Bob', avatarUrl: null },
+        otherParticipant: { id: 'u2', username: 'bob', displayName: 'Bob', avatarUrl: null, avatarPreset: 'wolf_grey' },
         lastMessageContent: 'Salut',
         lastMessageCreatedAt: '2026-07-15T10:00:00Z',
       },
@@ -134,12 +135,17 @@ describe('getConversationForNotification', () => {
     const result = await getConversationForNotification('c1');
 
     expect(mockRpc).toHaveBeenCalledWith('get_conversation_for_notification', { p_conversation_id: 'c1' });
+    // avatarPreset : repli constant (wolf_white_calm) — get_conversation_for_notification
+    // (Phase 6) n'a volontairement pas été modifiée en Phase 7.5, voir commentaire
+    // dans services/conversations.ts. Si l'autre participant a une vraie photo
+    // (avatarUrl), elle reste de toute façon prioritaire à l'affichage.
     expect(result).toEqual({
       conversationId: 'c1',
       id: 'u2',
       username: 'bob',
       displayName: 'Bob',
       avatarUrl: null,
+      avatarPreset: 'wolf_white_calm',
     });
   });
 

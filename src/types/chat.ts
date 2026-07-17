@@ -1,8 +1,12 @@
+import type { WolfAvatarId } from '@/constants/avatars';
+
 export type PublicProfile = {
   id: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  /** Avatar loup prédéfini (Phase 7.5), toujours en repli si `avatarUrl` est absent — voir `AvatarImage`. */
+  avatarPreset: WolfAvatarId;
 };
 
 /** 'owner' est unique (au plus un compte), jamais modifiable côté client (voir migration Phase 5.S3). */

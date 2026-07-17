@@ -1,32 +1,43 @@
-# Emplacement des avatars loups (Phase 7.2 — architecture uniquement)
+# Emplacement des avatars loups (Phase 7.5 — complète, 9/9)
 
-Aucune image définitive dans ce dossier pour l'instant. Convention à
-respecter lorsque les 9 images seront fournies (Phase 7.5) :
+Convention respectée (identifiant catalogue `constants/avatars.ts` → fichier,
+PNG carré 512×512, cadrage cohérent avec le loup officiel du branding —
+jamais ce visuel lui-même) :
 
-| Identifiant catalogue (`constants/avatars.ts`) | Fichier attendu |
-|---|---|
-| `wolf_white_calm` | `wolf_white_calm.png` |
-| `wolf_grey` | `wolf_grey.png` |
-| `wolf_black` | `wolf_black.png` |
-| `wolf_brown` | `wolf_brown.png` |
-| `wolf_snow` | `wolf_snow.png` |
-| `wolf_green_eye` | `wolf_green_eye.png` |
-| `wolf_young` | `wolf_young.png` |
-| `wolf_guardian` | `wolf_guardian.png` |
-| `wolf_alpha` | `wolf_alpha.png` |
+| Identifiant | Fichier | Statut |
+|---|---|---|
+| `wolf_white_calm` | `wolf_white_calm.png` | ✅ présent |
+| `wolf_grey` | `wolf_grey.png` | ✅ présent |
+| `wolf_black` | `wolf_black.png` | ✅ présent |
+| `wolf_brown` | `wolf_brown.png` | ✅ présent |
+| `wolf_snow` | `wolf_snow.png` | ✅ présent |
+| `wolf_green_eye` | `wolf_green_eye.png` | ✅ présent |
+| `wolf_young` | `wolf_young.png` | ✅ présent |
+| `wolf_guardian` | `wolf_guardian.png` | ✅ présent |
+| `wolf_alpha` | `wolf_alpha.png` | ✅ présent |
 
-Format attendu : PNG carré, 512×512, cadrage cohérent avec le loup officiel
-du branding (`white-alpha-wolf-main.png`) mais **jamais ce visuel lui-même**
-— le loup au bandeau reste réservé à l'identité White Alpha, jamais un
-avatar utilisateur ordinaire (voir PLAN.md, Phase 7).
+`npm run check:avatars` confirme les 9/9 actifs dans `WOLF_AVATAR_SOURCES` —
+plus aucun repli texte en usage normal (reste disponible comme garde si une
+future entrée venait à manquer).
 
-Une fois un fichier ajouté, décommenter l'entrée correspondante dans
-`WOLF_AVATAR_SOURCES` (`src/constants/avatars.ts`) :
+## Historique des écarts corrigés pendant l'intégration
 
-```ts
-wolf_white_calm: require('../../assets/images/avatars/wolf_white_calm.png'),
-```
+- Une première tentative pour `wolf_alpha` était un doublon binaire exact de
+  `wolf_grey.png` (même fichier téléchargé deux fois) — écartée.
+- Deux tentatives pour `wolf_white_calm` ont été écartées : un loup noir avec
+  cicatrice (hors spécification), puis le loup officiel du branding
+  (bandeau + cicatrices + œil vert — réservé à l'identité de l'app, jamais un
+  avatar utilisateur). L'image finalement retenue est un loup gris très clair
+  au regard calme, sans cicatrice ni bandeau ni neige.
 
-Tant qu'une entrée n'est pas ajoutée, `resolveWolfAvatarSource()` renvoie
-`null` et `AvatarImage` retombe sur son repli existant (initiale) — aucune
-image manquante ne peut casser le build.
+## Procédure si une entrée devait être remplacée
+
+1. Redimensionner en PNG carré 512×512 si nécessaire.
+2. Mettre à jour l'entrée dans `WOLF_AVATAR_SOURCES` (`src/constants/avatars.ts`).
+3. Vérifier qu'aucune image n'est un doublon binaire des autres (hash SHA-256).
+4. Exécuter `npm run check:avatars` (doit rester à 9/9).
+5. Exécuter `npm test -- --runInBand`.
+
+Tant qu'une entrée est absente, `resolveWolfAvatarSource()` renvoie `null` et
+`AvatarImage`/`WolfAvatarTile` retombent sur leur repli existant (initiale ou
+nom du loup) — aucune image manquante ne peut casser le build.

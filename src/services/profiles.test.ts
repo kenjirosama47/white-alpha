@@ -31,14 +31,27 @@ describe('searchProfiles', () => {
 
   it('retourne les profils mappés pour une recherche valide', async () => {
     mockRpc.mockResolvedValue({
-      data: [{ id: '1', username: 'bob', display_name: 'Bob', avatar_url: null }],
+      data: [{ id: '1', username: 'bob', display_name: 'Bob', avatar_url: null, avatar_preset: 'wolf_grey' }],
       error: null,
     });
 
     const result = await searchProfiles('bob');
 
     expect(mockRpc).toHaveBeenCalledWith('search_public_profiles', { search_query: 'bob' });
-    expect(result).toEqual([{ id: '1', username: 'bob', displayName: 'Bob', avatarUrl: null }]);
+    expect(result).toEqual([
+      { id: '1', username: 'bob', displayName: 'Bob', avatarUrl: null, avatarPreset: 'wolf_grey' },
+    ]);
+  });
+
+  it('retombe sur wolf_white_calm si avatar_preset renvoyé est hors liste officielle (défense en profondeur)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: '1', username: 'bob', display_name: 'Bob', avatar_url: null, avatar_preset: 'inconnu' }],
+      error: null,
+    });
+
+    const result = await searchProfiles('bob');
+
+    expect(result[0].avatarPreset).toBe('wolf_white_calm');
   });
 
   it("ne laisse jamais fuir un message technique brut (pas de SQLSTATE P0001) : message français générique à la place", async () => {
@@ -76,31 +89,46 @@ describe('getMyProfile', () => {
     });
   });
 
-  it('retourne le profil connecté avec avatarPath et role en plus de avatarUrl', async () => {
+  it('retourne le profil connecté avec avatarPath, avatarPreset et role en plus de avatarUrl', async () => {
     const select = jest.fn().mockReturnValue({ maybeSingle });
     mockFrom.mockReturnValue({ select });
     maybeSingle.mockResolvedValue({
-      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: 'me/abc.jpg', role: 'user' },
+      data: {
+        id: 'me',
+        username: 'kenjiro47',
+        display_name: 'Kenjiro',
+        avatar_url: 'me/abc.jpg',
+        avatar_preset: 'wolf_alpha',
+        role: 'user',
+      },
       error: null,
     });
 
     const result = await getMyProfile();
 
     expect(mockFrom).toHaveBeenCalledWith('profiles');
-    expect(select).toHaveBeenCalledWith('id, username, display_name, avatar_url, role');
+    expect(select).toHaveBeenCalledWith('id, username, display_name, avatar_url, avatar_preset, role');
     expect(result).toEqual({
       id: 'me',
       username: 'kenjiro47',
       displayName: 'Kenjiro',
       avatarUrl: 'https://cdn.test/avatars/me/abc.jpg',
       avatarPath: 'me/abc.jpg',
+      avatarPreset: 'wolf_alpha',
       role: 'user',
     });
   });
 
   it('retourne role: owner quand le profil connecté est le owner', async () => {
     maybeSingle.mockResolvedValue({
-      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null, role: 'owner' },
+      data: {
+        id: 'me',
+        username: 'kenjiro47',
+        display_name: 'Kenjiro',
+        avatar_url: null,
+        avatar_preset: 'wolf_white_calm',
+        role: 'owner',
+      },
       error: null,
     });
 
@@ -109,9 +137,16 @@ describe('getMyProfile', () => {
     expect(result.role).toBe('owner');
   });
 
-  it("n'expose jamais d'email : seules id/username/display_name/avatar_url/role sont lues", async () => {
+  it("n'expose jamais d'email : seules id/username/display_name/avatar_url/avatar_preset/role sont lues", async () => {
     maybeSingle.mockResolvedValue({
-      data: { id: 'me', username: 'kenjiro47', display_name: 'Kenjiro', avatar_url: null, role: 'user' },
+      data: {
+        id: 'me',
+        username: 'kenjiro47',
+        display_name: 'Kenjiro',
+        avatar_url: null,
+        avatar_preset: 'wolf_white_calm',
+        role: 'user',
+      },
       error: null,
     });
 

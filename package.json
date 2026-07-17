@@ -54,7 +54,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "check:avatars": "node scripts/avatar-assets-guard.js"
   },
   "private": true,
   "jest": {

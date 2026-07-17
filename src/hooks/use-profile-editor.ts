@@ -106,8 +106,10 @@ export function useProfileEditor(profile: MyProfile, onSaved: (profile: MyProfil
       setPickedAvatar(null);
       setSuccess(true);
       // `updateMyProfile` ne renvoie jamais `role` (jamais modifiable via ce
-      // chemin, voir migration Phase 5.S3) : conservé depuis la baseline.
-      onSaved({ ...updated, role: profile.role });
+      // chemin, voir migration Phase 5.S3) ni `avatarPreset` (modifiable
+      // uniquement via update_my_avatar_preset, Phase 7.5) : les deux sont
+      // conservés depuis la baseline.
+      onSaved({ ...updated, role: profile.role, avatarPreset: profile.avatarPreset });
       return true;
     } catch (err) {
       // La RPC a échoué après un upload réussi : supprime le NOUVEAU fichier
