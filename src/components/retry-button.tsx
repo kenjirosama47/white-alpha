@@ -1,7 +1,4 @@
-import { Pressable, StyleSheet } from 'react-native';
-
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Button } from '@/components/button';
 
 type RetryButtonProps = {
   onPress: () => void;
@@ -9,33 +6,7 @@ type RetryButtonProps = {
   accessibilityLabel?: string;
 };
 
-/** Bouton « Réessayer » réutilisable : taille tactile correcte, cible cohérente sur tout l'écran. */
+/** Bouton « Réessayer » réutilisable : fine enveloppe autour de `Button` (variante secondaire, taille réduite) pour préserver son API existante. */
 export function RetryButton({ onPress, label = 'Réessayer', accessibilityLabel }: RetryButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-      <ThemedText type="smallBold">{label}</ThemedText>
-    </Pressable>
-  );
+  return <Button onPress={onPress} label={label} accessibilityLabel={accessibilityLabel} variant="secondary" size="small" />;
 }
-
-const styles = StyleSheet.create({
-  button: {
-    minHeight: 44,
-    minWidth: 44,
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderWidth: 1,
-    borderColor: '#60646C',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-});

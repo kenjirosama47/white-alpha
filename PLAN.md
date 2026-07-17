@@ -822,11 +822,21 @@ constaté après clôture.
     (identique aux builds 12/13/14, même keystore EAS)
 - Phase 6 Notifications close.
 
-## Phase 7 — Durcissement & polish
+## Phase 7 — Refonte Design, identité visuelle et UX White Alpha
+
+Phase exclusivement consacrée à l'interface, au branding, à l'expérience
+utilisateur et aux assets visuels : identité loup blanc (icône, splash,
+écrans d'authentification, accueil, avatars), textes officiels White
+Alpha, Design System (couleurs, typographies, espacements, composants),
+audit UX écran par écran. Aucune modification de Supabase, des
+notifications, du MFA, de la sécurité, des migrations ou des règles RLS
+dans cette phase.
+
+## Phase 8 — Durcissement & polish restant
+
 - Revue des policies RLS Supabase (accès conversations/messages/médias).
-- Gestion des erreurs réseau, états de chargement, écrans vides.
-- Remplacement des assets de démonstration Expo restants (logo/splash) par le
-  branding définitif de l'application.
+- Gestion des erreurs réseau, états de chargement, écrans vides
+  (au-delà de la refonte visuelle de la Phase 7).
 
 ## Décision d'architecture — Supabase & Railway
 

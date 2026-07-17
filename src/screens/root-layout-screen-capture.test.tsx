@@ -49,6 +49,14 @@ jest.mock('@/hooks/use-notification-response', () => ({
   useNotificationResponseNavigation: jest.fn(),
 }));
 
+jest.mock('@expo-google-fonts/inter', () => ({
+  Inter_400Regular: 'Inter_400Regular',
+  Inter_500Medium: 'Inter_500Medium',
+  Inter_600SemiBold: 'Inter_600SemiBold',
+  Inter_700Bold: 'Inter_700Bold',
+  useFonts: () => [true, null],
+}));
+
 const mockUseAuth = jest.fn();
 jest.mock('@/contexts/auth-context', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,

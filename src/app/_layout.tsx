@@ -1,3 +1,4 @@
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from '@expo-google-fonts/inter';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { useEffect } from 'react';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -34,6 +35,17 @@ configureNotificationHandler();
 
 function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  // `fontError` fait volontairement partie du gate de disponibilité (pas
+  // seulement `fontsLoaded`) : un échec de chargement ne doit jamais bloquer
+  // indéfiniment le splash, l'app démarre alors avec le repli système
+  // (`Fonts`, constants/theme.ts) tant qu'Inter n'est pas disponible.
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  const fontsReady = fontsLoaded || !!fontError;
 
   // Ouvre la conversation correspondante lorsqu'une notification est
   // touchée, avec revalidation systématique de session et d'appartenance
@@ -55,7 +67,7 @@ function RootNavigator() {
   // qu'une fois isLoading passé à false.
   return (
     <>
-      <AnimatedSplashOverlay ready={!isLoading} />
+      <AnimatedSplashOverlay ready={!isLoading && fontsReady} />
       {/* Un seul abonnement réseau pour toute l'application (pas un par
           écran) : monté ici, jamais dans (app)/(auth). */}
       <OfflineBanner />
