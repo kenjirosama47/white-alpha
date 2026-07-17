@@ -35,17 +35,20 @@ describe('OfflineBanner', () => {
   it("n'affiche rien quand la connexion est stable", async () => {
     await render(<OfflineBanner />);
 
-    expect(screen.queryByText('Aucune connexion Internet')).toBeNull();
+    expect(screen.queryByText('Connexion indisponible')).toBeNull();
     expect(screen.queryByText('Connexion rétablie')).toBeNull();
   });
 
-  it('affiche "Aucune connexion Internet" pendant une coupure', async () => {
+  it('affiche "Connexion indisponible" et le texte explicatif pendant une coupure', async () => {
     await render(<OfflineBanner />);
     await emitNetworkChange(listener, { isConnected: false });
 
-    const banner = screen.getByText('Aucune connexion Internet');
-    expect(banner).toBeTruthy();
-    expect(screen.getByLabelText('Aucune connexion Internet').props.accessibilityRole).toBe('alert');
+    expect(screen.getByText('Connexion indisponible')).toBeTruthy();
+    expect(screen.getByText('Certaines actions reprendront une fois le réseau rétabli.')).toBeTruthy();
+    const banner = screen.getByLabelText(
+      'Connexion indisponible. Certaines actions reprendront une fois le réseau rétabli.',
+    );
+    expect(banner.props.accessibilityRole).toBe('alert');
   });
 
   it('affiche brièvement "Connexion rétablie" au retour du réseau', async () => {
@@ -53,7 +56,7 @@ describe('OfflineBanner', () => {
     await emitNetworkChange(listener, { isConnected: false });
     await emitNetworkChange(listener, { isConnected: true });
 
-    expect(screen.queryByText('Aucune connexion Internet')).toBeNull();
+    expect(screen.queryByText('Connexion indisponible')).toBeNull();
     expect(screen.getByText('Connexion rétablie')).toBeTruthy();
   });
 

@@ -1,7 +1,20 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { FadeIn } from 'react-native-reanimated';
 
 import WelcomeScreen from '@/app/(auth)/index';
 import { Colors } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
+
+// Mock local (indépendant du mock global de jest.setup.js, qui simule
+// uniquement le module react-native-reanimated) : contrôle directement ce
+// que le hook applicatif @/hooks/use-reduced-motion renvoie, pour vérifier
+// que WelcomeScreen respecte bien le réglage système « Réduire les
+// animations » (Phase 7.6).
+jest.mock('@/hooks/use-reduced-motion', () => ({
+  useReducedMotion: jest.fn(() => false),
+}));
+
+const mockUseReducedMotion = useReducedMotion as jest.Mock;
 
 // Ce fichier vit délibérément hors de src/app (voir app-layout.test.tsx pour
 // l'explication complète : Expo Router embarquerait sinon ce test dans le
@@ -147,5 +160,29 @@ describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
     fireEvent.press(label);
 
     expect(flattenStyle(label.parent?.props.style)).toMatchObject({ borderWidth: 1, borderColor: Colors.light.border });
+  });
+});
+
+describe('WelcomeScreen — réduction des animations (Phase 7.6)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("joue l'apparition progressive quand « Réduire les animations » est désactivé", async () => {
+    mockUseReducedMotion.mockReturnValue(false);
+    const durationSpy = jest.spyOn(FadeIn, 'duration');
+
+    await render(<WelcomeScreen />);
+
+    expect(durationSpy).toHaveBeenCalledWith(500);
+  });
+
+  it("n'applique aucune animation d'entrée quand « Réduire les animations » est activé", async () => {
+    mockUseReducedMotion.mockReturnValue(true);
+    const durationSpy = jest.spyOn(FadeIn, 'duration');
+
+    await render(<WelcomeScreen />);
+
+    expect(durationSpy).not.toHaveBeenCalled();
   });
 });

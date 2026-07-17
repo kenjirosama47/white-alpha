@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 type AuthScreenShellProps = {
   /** Illustration White Alpha (loup) affichée en partie haute — omise sur les écrans très denses (ex. MFA). */
@@ -35,6 +36,8 @@ type AuthScreenShellProps = {
  * montage — jamais une animation permanente).
  */
 export function AuthScreenShell({ illustrationSource, title, subtitle, children, footer, onBack }: AuthScreenShellProps) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView
@@ -53,7 +56,7 @@ export function AuthScreenShell({ illustrationSource, title, subtitle, children,
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeIn.duration(400)} style={styles.content}>
+            <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(400)} style={styles.content}>
               {illustrationSource && (
                 <Image source={illustrationSource} style={styles.illustration} accessibilityIgnoresInvertColors />
               )}

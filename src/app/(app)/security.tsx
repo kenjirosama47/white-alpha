@@ -244,7 +244,12 @@ function EnrollmentFlow({ enrollment, isVerifying, verifyError, onVerify, onCanc
         loading={isVerifying}
         disabled={code.length !== 6}
       />
-      <Pressable onPress={() => onCancel()} disabled={isVerifying} hitSlop={8} accessibilityRole="button">
+      <Pressable
+        onPress={() => onCancel()}
+        disabled={isVerifying}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Annuler">
         <ThemedText type="link" themeColor="textSecondary" style={styles.centeredText}>
           Annuler
         </ThemedText>

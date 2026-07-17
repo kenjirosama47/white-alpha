@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { OFFLINE_COPY } from '@/constants/copy';
 import { Spacing } from '@/constants/theme';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,14 +22,23 @@ export function OfflineBanner() {
     return null;
   }
 
+  const label = isOffline
+    ? `${OFFLINE_COPY.offlineTitle}. ${OFFLINE_COPY.offlineDescription}`
+    : OFFLINE_COPY.reconnectedTitle;
+
   return (
     <View
       style={[styles.banner, { backgroundColor: isOffline ? theme.danger : theme.accentBright }]}
       accessibilityRole="alert"
-      accessibilityLabel={isOffline ? 'Aucune connexion Internet' : 'Connexion rétablie'}>
+      accessibilityLabel={label}>
       <ThemedText type="label" style={{ color: theme.onAccent }}>
-        {isOffline ? 'Aucune connexion Internet' : 'Connexion rétablie'}
+        {isOffline ? OFFLINE_COPY.offlineTitle : OFFLINE_COPY.reconnectedTitle}
       </ThemedText>
+      {isOffline && (
+        <ThemedText type="caption" style={{ color: theme.onAccent }}>
+          {OFFLINE_COPY.offlineDescription}
+        </ThemedText>
+      )}
     </View>
   );
 }
@@ -36,7 +46,9 @@ export function OfflineBanner() {
 const styles = StyleSheet.create({
   banner: {
     paddingVertical: Spacing.one,
+    paddingHorizontal: Spacing.three,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.half,
   },
 });

@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { FadeIn } from 'react-native-reanimated';
 
 import ConversationScreen from '@/app/(app)/conversation/[id]';
+import type { Message } from '@/types/chat';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
@@ -34,9 +36,10 @@ jest.mock('@/components/message-video', () => ({
 }));
 
 const mockSend = jest.fn();
+let mockMessages: unknown[] = [];
 jest.mock('@/hooks/use-messages', () => ({
   useMessages: () => ({
-    messages: [],
+    messages: mockMessages,
     isLoading: false,
     isLoadingMore: false,
     hasMore: false,
@@ -46,6 +49,25 @@ jest.mock('@/hooks/use-messages', () => ({
     loadMore: jest.fn(),
     send: mockSend,
   }),
+}));
+
+jest.mock('@/hooks/use-signed-attachment-url', () => ({
+  useSignedAttachmentUrl: () => ({
+    url: 'https://signed.example/photo.jpg',
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+  }),
+}));
+
+const mockRestoreAccessibilityFocus = jest.fn();
+jest.mock('@/utils/accessibility-focus', () => ({
+  restoreAccessibilityFocus: (...args: unknown[]) => mockRestoreAccessibilityFocus(...args),
+}));
+
+let mockReduceMotion = false;
+jest.mock('@/hooks/use-reduced-motion', () => ({
+  useReducedMotion: () => mockReduceMotion,
 }));
 
 const mockPickImage = jest.fn();
@@ -266,5 +288,73 @@ describe('ConversationScreen — photo et vidéo', () => {
     fireEvent.press(sendButtons[sendButtons.length - 1]);
 
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith('Message texte indépendant'));
+  });
+});
+
+const imageMessage: Message = {
+  id: 'msg-1',
+  conversationId: 'conv-1',
+  senderId: 'user-2',
+  content: '',
+  createdAt: '2026-07-18T10:00:00.000Z',
+  attachment: {
+    id: 'att-1',
+    messageId: 'msg-1',
+    conversationId: 'conv-1',
+    uploaderId: 'user-2',
+    storagePath: 'conv-1/user-2/photo.jpg',
+    sizeBytes: 1000,
+    width: 800,
+    height: 600,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    mediaType: 'image',
+    mimeType: 'image/jpeg',
+  },
+};
+
+describe('ConversationScreen — visionneuse image et restauration du focus (Phase 7.6)', () => {
+  beforeEach(() => {
+    mockRestoreAccessibilityFocus.mockReset();
+    mockMessages = [imageMessage];
+  });
+
+  afterEach(() => {
+    mockMessages = [];
+  });
+
+  it('ouvre la visionneuse au tap sur une image, puis restaure le focus sur cette image à la fermeture', async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByTestId('message-image-pressable'));
+
+    expect(await screen.findByRole('button', { name: "Fermer l'image" })).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: "Fermer l'image" }));
+
+    expect(mockRestoreAccessibilityFocus).toHaveBeenCalledTimes(1);
+    expect(mockRestoreAccessibilityFocus.mock.calls[0][0]).not.toBeNull();
+  });
+
+  it("ne plante jamais si la référence déclencheur n'existe plus (ex. liste re-rendue avant la fermeture)", async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByTestId('message-image-pressable'));
+    expect(await screen.findByRole('button', { name: "Fermer l'image" })).toBeTruthy();
+
+    // Simule une liste vidée (ex. suppression) pendant que la visionneuse est ouverte.
+    mockMessages = [];
+
+    expect(() => fireEvent.press(screen.getByRole('button', { name: "Fermer l'image" }))).not.toThrow();
+  });
+
+  it("respecte toujours la réduction des animations sur la liste de messages, même avec la visionneuse disponible", async () => {
+    mockReduceMotion = true;
+    const durationSpy = jest.spyOn(FadeIn, 'duration');
+
+    await render(<ConversationScreen />);
+
+    expect(durationSpy).not.toHaveBeenCalled();
+    mockReduceMotion = false;
+    durationSpy.mockRestore();
   });
 });

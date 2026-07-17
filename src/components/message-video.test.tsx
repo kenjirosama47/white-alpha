@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { MessageVideo } from '@/components/message-video';
 
@@ -24,16 +24,34 @@ const mockPlayer = {
   replaceAsync: mockReplaceAsync,
 };
 
-jest.mock('expo-video', () => ({
-  useVideoPlayer: (_source: unknown, setup?: (p: typeof mockPlayer) => void) => {
-    setup?.(mockPlayer);
-    return mockPlayer;
-  },
-  VideoView: 'VideoView',
-}));
+// Instance factice non nulle : permet de vérifier que la restauration du
+// focus (Phase 7.6) cible bien la vidéo une fois montée, sans dépendre du
+// comportement des refs sur un composant hôte simulé par react-test-renderer.
+const mockVideoViewInstance = { __mockVideoView: true };
+let mockLastVideoViewProps: Record<string, unknown> | null = null;
+
+jest.mock('expo-video', () => {
+  const ReactActual = jest.requireActual('react');
+  return {
+    useVideoPlayer: (_source: unknown, setup?: (p: typeof mockPlayer) => void) => {
+      setup?.(mockPlayer);
+      return mockPlayer;
+    },
+    VideoView: ReactActual.forwardRef((props: Record<string, unknown>, ref: unknown) => {
+      mockLastVideoViewProps = props;
+      ReactActual.useImperativeHandle(ref, () => mockVideoViewInstance);
+      return null;
+    }),
+  };
+});
 
 jest.mock('expo', () => ({
   useEvent: () => ({ status: mockPlayerStatus, error: mockPlayerError }),
+}));
+
+const mockRestoreAccessibilityFocus = jest.fn();
+jest.mock('@/utils/accessibility-focus', () => ({
+  restoreAccessibilityFocus: (...args: unknown[]) => mockRestoreAccessibilityFocus(...args),
 }));
 
 describe('MessageVideo', () => {
@@ -42,6 +60,7 @@ describe('MessageVideo', () => {
     mockPlayerStatus = 'idle';
     mockPlayerError = undefined;
     mockReplaceAsync.mockResolvedValue(undefined);
+    mockLastVideoViewProps = null;
   });
 
   it('affiche un indicateur de chargement tant que l’URL signée n’est pas prête', async () => {
@@ -82,6 +101,22 @@ describe('MessageVideo', () => {
     fireEvent.press(screen.getByText(/Toucher pour réessayer/));
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('le bouton lecture est identifiable par un lecteur d’écran (rôle et libellé accessibles avec la durée)', async () => {
+    mockUrlState = { url: 'https://signed.example/clip.mp4', isLoading: false, error: null };
+
+    await render(<MessageVideo storagePath="conv-1/user-1/clip.mp4" width={1280} height={720} durationMs={15_000} />);
+
+    expect(screen.getByRole('button', { name: 'Lire la vidéo, durée 0:15' })).toBeTruthy();
+  });
+
+  it("l'état de chargement est identifiable par un lecteur d'écran (rôle et libellé accessibles)", async () => {
+    mockUrlState = { url: null, isLoading: true, error: null };
+
+    await render(<MessageVideo storagePath="conv-1/user-1/clip.mp4" width={1280} height={720} durationMs={15_000} />);
+
+    expect(screen.getByLabelText('Chargement de la vidéo')).toBeTruthy();
   });
 
   it("n'appelle jamais pause()/play() explicitement sur le lecteur au démontage : useVideoPlayer le libère déjà seul", async () => {
@@ -129,5 +164,38 @@ describe('MessageVideo', () => {
     await Promise.resolve();
 
     expect(mockPlay).not.toHaveBeenCalled();
+  });
+
+  it('ouvre la lecture (bouton ▶) puis restaure le focus sur la vidéo à la sortie du plein écran natif (Phase 7.6)', async () => {
+    mockUrlState = { url: 'https://signed.example/clip.mp4', isLoading: false, error: null };
+
+    await render(<MessageVideo storagePath="conv-1/user-1/clip.mp4" width={1280} height={720} durationMs={15_000} />);
+
+    fireEvent.press(screen.getByText('▶'));
+    await waitFor(() => expect(mockPlay).toHaveBeenCalledTimes(1));
+
+    expect(mockLastVideoViewProps).not.toBeNull();
+    await act(async () => {
+      (mockLastVideoViewProps?.onFullscreenExit as () => void)();
+    });
+
+    expect(mockRestoreAccessibilityFocus).toHaveBeenCalledWith(mockVideoViewInstance);
+  });
+
+  it("ne plante jamais si la référence vidéo n'existe plus au moment de la sortie du plein écran (composant démonté)", async () => {
+    mockUrlState = { url: 'https://signed.example/clip.mp4', isLoading: false, error: null };
+
+    const { unmount } = await render(
+      <MessageVideo storagePath="conv-1/user-1/clip.mp4" width={1280} height={720} durationMs={15_000} />,
+    );
+
+    fireEvent.press(screen.getByText('▶'));
+    await waitFor(() => expect(mockPlay).toHaveBeenCalledTimes(1));
+
+    const onFullscreenExit = mockLastVideoViewProps?.onFullscreenExit as () => void;
+    await unmount();
+
+    expect(() => onFullscreenExit()).not.toThrow();
+    expect(mockRestoreAccessibilityFocus).toHaveBeenCalledWith(null);
   });
 });

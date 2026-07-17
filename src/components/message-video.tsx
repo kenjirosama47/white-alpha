@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useSignedAttachmentUrl } from '@/hooks/use-signed-attachment-url';
+import { useTheme } from '@/hooks/use-theme';
+import { restoreAccessibilityFocus } from '@/utils/accessibility-focus';
 import { formatDuration } from '@/utils/format';
 
 type MessageVideoProps = {
@@ -25,9 +27,20 @@ const FALLBACK_ASPECT_RATIO = 16 / 9;
  * PiP et lecture en arrière-plan désactivés.
  */
 export function MessageVideo({ storagePath, width, height, durationMs }: MessageVideoProps) {
+  const theme = useTheme();
   const { url, isLoading, error: urlError, refresh } = useSignedAttachmentUrl(storagePath);
   const [hasStarted, setHasStarted] = useState(false);
   const aspectRatio = width && height ? width / height : FALLBACK_ASPECT_RATIO;
+  // Restauration du focus d'accessibilité après le plein écran natif (Phase
+  // 7.6) : avant la lecture, l'élément visible est le bouton ▶ ; une fois la
+  // lecture démarrée, ce bouton est démonté et remplacé par `VideoView`
+  // elle-même — c'est donc elle qui reçoit le focus à la sortie du plein
+  // écran (seul élément encore réellement monté à ce moment-là, au même
+  // endroit visuel que le bouton initial). Si le message est supprimé
+  // pendant que le plein écran est ouvert, cette ref redevient null avant
+  // l'appel : `restoreAccessibilityFocus` ne fait alors rien, sans jamais
+  // planter.
+  const videoViewRef = useRef<VideoView>(null);
 
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
@@ -74,10 +87,15 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
   }
 
   if (urlError || status === 'error') {
+    const message = `${playerError?.message ? 'Lecture impossible.' : 'Vidéo indisponible.'} Toucher pour réessayer.`;
     return (
-      <Pressable onPress={retry} style={[styles.placeholder, { aspectRatio }]}>
+      <Pressable
+        onPress={retry}
+        style={[styles.placeholder, { aspectRatio, backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}
+        accessibilityRole="button"
+        accessibilityLabel={message}>
         <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
-          {playerError?.message ? 'Lecture impossible.' : "Vidéo indisponible."} Toucher pour réessayer.
+          {message}
         </ThemedText>
       </Pressable>
     );
@@ -85,7 +103,10 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
 
   if (isLoading) {
     return (
-      <View style={[styles.placeholder, { aspectRatio }]}>
+      <View
+        style={[styles.placeholder, { aspectRatio, backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}
+        accessibilityRole="progressbar"
+        accessibilityLabel="Chargement de la vidéo">
         <ActivityIndicator size="small" />
       </View>
     );
@@ -93,7 +114,11 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
 
   if (!hasStarted) {
     return (
-      <Pressable onPress={handlePlayPress} style={[styles.placeholder, { aspectRatio }]}>
+      <Pressable
+        onPress={handlePlayPress}
+        style={[styles.placeholder, { aspectRatio, backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Lire la vidéo, durée ${formatDuration(durationMs)}`}>
         <View style={styles.playButton}>
           <ThemedText type="smallBold" style={styles.playIcon}>
             ▶
@@ -109,12 +134,14 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
   return (
     <View style={[styles.videoContainer, { aspectRatio }]}>
       <VideoView
+        ref={videoViewRef}
         style={styles.video}
         player={player}
         nativeControls
         allowsPictureInPicture={false}
         contentFit="cover"
         fullscreenOptions={{ enable: true }}
+        onFullscreenExit={() => restoreAccessibilityFocus(videoViewRef.current)}
         // Par défaut ('surfaceView'), Android rend la vidéo sur une couche de
         // composition séparée qui ignore l'ordre d'empilement React Native et
         // peut recouvrir des vues sœurs (ex. le menu Supprimer) même quand
@@ -138,17 +165,21 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 240,
     minHeight: 120,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00000014',
     padding: Spacing.two,
     gap: Spacing.two,
   },
+  // Bouton lecture/badge durée : « chrome » superposé à une vignette vidéo
+  // par nature imprévisible (pas de couleur de fond fixe), au même titre que
+  // le menu ⋮ des vidéos dans message-bubble.tsx et le fond du visualiseur
+  // plein écran — noir/blanc conservés volontairement, non issus du thème.
   playButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: TouchTarget.min,
+    height: TouchTarget.min,
+    borderRadius: TouchTarget.min / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#000000B3',
@@ -171,7 +202,7 @@ const styles = StyleSheet.create({
   videoContainer: {
     width: '100%',
     maxWidth: 240,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   video: {

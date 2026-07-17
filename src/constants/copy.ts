@@ -36,3 +36,14 @@ export const SECURITY_COPY = {
 export const SEARCH_COPY = {
   noResultsTitle: 'Aucun membre trouvé',
 } as const;
+
+export const OFFLINE_COPY = {
+  offlineTitle: 'Connexion indisponible',
+  offlineDescription: 'Certaines actions reprendront une fois le réseau rétabli.',
+  reconnectedTitle: 'Connexion rétablie',
+} as const;
+
+/** État vide générique (Phase 7.6) : galerie ou contenu indisponible sans détail technique. */
+export const EMPTY_CONTENT_COPY = {
+  title: 'Aucun élément disponible',
+} as const;

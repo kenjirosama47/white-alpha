@@ -67,10 +67,23 @@ function AvatarGalleryContent({ profile, onSaved }: AvatarGalleryContentProps) {
               <View
                 style={[
                   styles.tileRing,
-                  isSelected && { borderColor: theme.accent },
-                  !isSelected && { borderColor: 'transparent' },
+                  isSelected
+                    ? { borderColor: theme.accent, borderWidth: 3 }
+                    : { borderColor: theme.border, borderWidth: 1 },
                 ]}>
                 <WolfAvatarTile id={entry.id} />
+                {/* Repère de sélection non basé uniquement sur la couleur
+                    (Phase 7.6, Section 7) : une coche visible s'ajoute à
+                    l'épaisseur de bordure accrue, pour rester identifiable
+                    même sans distinction du vert (daltonisme, niveaux de
+                    gris, contraste élevé). */}
+                {isSelected && (
+                  <View style={[styles.checkBadge, { backgroundColor: theme.accent, borderColor: theme.surface }]}>
+                    <ThemedText type="caption" style={{ color: theme.onAccent }}>
+                      ✓
+                    </ThemedText>
+                  </View>
+                )}
               </View>
               <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1} style={styles.tileLabel}>
                 {entry.label}
@@ -144,9 +157,19 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   tileRing: {
-    borderWidth: 2,
     borderRadius: Radius.pill,
     padding: 3,
+  },
+  checkBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tileLabel: {
     textAlign: 'center',

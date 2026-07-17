@@ -44,5 +44,10 @@ jest.mock('react-native-reanimated', () => {
         return this;
       }
     },
+    // Par défaut, réglage système non réduit : les tests qui veulent
+    // simuler « Réduire les animations » activé surchargent via
+    // jest.mock('@/hooks/use-reduced-motion', ...) dans leur propre fichier
+    // (voir welcome-screen.test.tsx, Phase 7.6).
+    useReducedMotion: () => false,
   };
 });

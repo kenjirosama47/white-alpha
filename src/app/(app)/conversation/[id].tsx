@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, type View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useMediaUpload } from '@/hooks/use-media-upload';
 import { useMessageDeletion } from '@/hooks/use-message-deletion';
 import { useMessages } from '@/hooks/use-messages';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 import { isSameLocalDay, formatDateSeparator } from '@/utils/datetime';
@@ -32,6 +33,7 @@ export default function ConversationScreen() {
     otherAvatarUrl?: string;
   }>();
   const theme = useTheme();
+  const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const {
@@ -60,6 +62,10 @@ export default function ConversationScreen() {
   } = useMediaUpload(id);
   const [draft, setDraft] = useState('');
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  // Élément (vignette pressée) sur lequel restaurer le focus d'accessibilité
+  // à la fermeture de la visionneuse — une ref, jamais un state : sa valeur
+  // n'a besoin d'aucun re-rendu, seulement d'être lue au moment de fermer.
+  const imageViewerTriggerRef = useRef<View | null>(null);
 
   // FlatList inverted : données du plus récent au plus ancien pour que la
   // vue reste naturellement collée en bas, sur le dernier message.
@@ -138,12 +144,15 @@ export default function ConversationScreen() {
                   // affiché ne se ré-anime jamais en scrollant/paginant,
                   // seul un message réellement nouveau (ou nouvellement
                   // chargé) déclenche l'animation.
-                  <Animated.View entering={FadeIn.duration(200)}>
+                  <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(200)}>
                     {showDateSeparator && <DateSeparator label={formatDateSeparator(item.createdAt)} />}
                     <MessageBubble
                       message={item}
                       isOwnMessage={isOwnMessage}
-                      onImagePress={setViewerUrl}
+                      onImagePress={(pressedUrl, triggerNode) => {
+                        imageViewerTriggerRef.current = triggerNode;
+                        setViewerUrl(pressedUrl);
+                      }}
                       deletionState={isOwnMessage ? getDeletionState(item.id) : null}
                       onDelete={() => deleteMessage(item)}
                       onRetryDelete={() => retryDeletion(item)}
@@ -238,7 +247,7 @@ export default function ConversationScreen() {
           </ThemedView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <ImageViewerModal url={viewerUrl} onClose={() => setViewerUrl(null)} />
+      <ImageViewerModal url={viewerUrl} onClose={() => setViewerUrl(null)} triggerRef={imageViewerTriggerRef} />
     </ThemedView>
   );
 }

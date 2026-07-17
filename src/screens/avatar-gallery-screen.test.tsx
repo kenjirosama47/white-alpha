@@ -79,6 +79,15 @@ describe('AvatarGalleryScreen — affichage', () => {
 
     expect(screen.getByLabelText(/Loup gris/).props.accessibilityRole).toBe('button');
   });
+
+  it("l'avatar sélectionné est identifiable par un repère visuel autre que la couleur (coche)", async () => {
+    await render(<AvatarGalleryScreen />);
+
+    // Un seul « ✓ » visible : sur la tuile actuellement sélectionnée
+    // (l'avatar actuel par défaut) — indépendant de la couleur de la
+    // bordure, pour rester identifiable en niveaux de gris/daltonisme.
+    expect(screen.getAllByText('✓')).toHaveLength(1);
+  });
 });
 
 describe('AvatarGalleryScreen — sélection et aperçu', () => {

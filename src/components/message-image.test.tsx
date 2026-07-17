@@ -30,7 +30,18 @@ describe('MessageImage', () => {
 
     fireEvent.press(screen.getByTestId('message-image-pressable'));
 
-    expect(onPress).toHaveBeenCalledWith('https://signed.example/a.jpg');
+    expect(onPress.mock.calls[0][0]).toBe('https://signed.example/a.jpg');
+  });
+
+  it("transmet à onPress une référence vers l'élément pressé, pour restaurer le focus d'accessibilité à la fermeture de la visionneuse (Phase 7.6)", async () => {
+    mockState = { url: 'https://signed.example/a.jpg', isLoading: false, error: null };
+    const onPress = jest.fn();
+
+    await render(<MessageImage storagePath="conv-1/user-1/a.jpg" width={800} height={600} onPress={onPress} />);
+
+    fireEvent.press(screen.getByTestId('message-image-pressable'));
+
+    expect(onPress.mock.calls[0][1]).not.toBeNull();
   });
 
   it('affiche un état d’erreur avec possibilité de réessayer', async () => {
@@ -41,5 +52,21 @@ describe('MessageImage', () => {
     fireEvent.press(screen.getByText('Image indisponible. Toucher pour réessayer.'));
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("l'état d'erreur est identifiable par un lecteur d'écran (rôle et libellé accessibles)", async () => {
+    mockState = { url: null, isLoading: false, error: "Impossible de charger l'image pour le moment." };
+
+    await render(<MessageImage storagePath="conv-1/user-1/a.jpg" width={800} height={600} onPress={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Image indisponible. Toucher pour réessayer.' })).toBeTruthy();
+  });
+
+  it("l'état de chargement est identifiable par un lecteur d'écran (rôle et libellé accessibles)", async () => {
+    mockState = { url: null, isLoading: true, error: null };
+
+    await render(<MessageImage storagePath="conv-1/user-1/a.jpg" width={800} height={600} onPress={jest.fn()} />);
+
+    expect(screen.getByLabelText("Chargement de l'image")).toBeTruthy();
   });
 });

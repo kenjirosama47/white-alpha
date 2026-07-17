@@ -8,19 +8,21 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { WELCOME_COPY } from '@/constants/copy';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 
 const brandingIllustration = require('@/assets/images/white-alpha-wolf-branding.jpg');
 
 export default function WelcomeScreen() {
   const theme = useTheme();
+  const reduceMotion = useReducedMotion();
   const [primaryPressed, setPrimaryPressed] = useState(false);
   const [secondaryPressed, setSecondaryPressed] = useState(false);
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <Animated.View entering={FadeIn.duration(500)} style={styles.content}>
+        <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(500)} style={styles.content}>
           <ThemedView style={styles.heroSection}>
             <Image
               source={brandingIllustration}

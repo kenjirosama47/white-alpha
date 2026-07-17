@@ -13,7 +13,8 @@ import { formatTime } from '@/utils/datetime';
 type MessageBubbleProps = {
   message: Message;
   isOwnMessage: boolean;
-  onImagePress?: (url: string) => void;
+  /** `triggerNode` : élément déclencheur, pour restaurer le focus d'accessibilité à la fermeture de la visionneuse (Phase 7.6). */
+  onImagePress?: (url: string, triggerNode: View | null) => void;
   /** Uniquement pour ses propres messages : état de suppression et actions associées. */
   deletionState?: MessageDeletionState | null;
   onDelete?: () => void;
@@ -65,7 +66,7 @@ export function MessageBubble({
               storagePath={message.attachment.storagePath}
               width={message.attachment.width}
               height={message.attachment.height}
-              onPress={(url) => onImagePress?.(url)}
+              onPress={(url, triggerNode) => onImagePress?.(url, triggerNode)}
             />
           )}
           {message.attachment?.mediaType === 'video' && (
@@ -98,6 +99,7 @@ export function MessageBubble({
                       <Pressable
                         style={styles.videoMenuBackdrop}
                         onPress={() => setVideoMenuOpen(false)}
+                        accessibilityRole="button"
                         accessibilityLabel="Fermer le menu"
                       />
                       <View style={[styles.videoMenuDropdown, { backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}>
