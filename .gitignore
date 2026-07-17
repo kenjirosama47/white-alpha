@@ -13,10 +13,15 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+credentials.json
+
+# Local release artifacts (keystore-signed APKs, never committed)
+release-local/
 
 # Metro
 .metro-health-check*
