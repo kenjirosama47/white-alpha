@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { useState } from 'react';
 import { Pressable, Text } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
@@ -8,6 +9,8 @@ const mockOnAuthStateChange = jest.fn();
 const mockSignOut = jest.fn();
 const mockSignInWithPassword = jest.fn();
 const mockUnsubscribe = jest.fn();
+const mockResetPasswordForEmail = jest.fn();
+const mockUpdateUser = jest.fn();
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
@@ -16,6 +19,8 @@ jest.mock('@/lib/supabase', () => ({
       onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
       signOut: (...args: unknown[]) => mockSignOut(...args),
       signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
+      resetPasswordForEmail: (...args: unknown[]) => mockResetPasswordForEmail(...args),
+      updateUser: (...args: unknown[]) => mockUpdateUser(...args),
     },
   },
   AUTH_CALLBACK_URL: 'whitealpha://auth/callback',
@@ -313,5 +318,113 @@ describe('AuthProvider — cycle de vie du token push', () => {
 
     await waitFor(() => expect(screen.getByText('unauthenticated')).toBeTruthy());
     expect(mockDeactivateCurrentDevicePushToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AuthProvider — requestPasswordReset (Phase 7.3)', () => {
+  function ResetConsumer() {
+    const { requestPasswordReset } = useAuth();
+    const [result, setResult] = useState<{ error: string | null } | null>(null);
+    return (
+      <>
+        <Pressable onPress={async () => setResult(await requestPasswordReset('a@test.local'))}>
+          <Text>envoyer</Text>
+        </Pressable>
+        <Text>{result ? result.error ?? 'ok' : 'attente'}</Text>
+      </>
+    );
+  }
+
+  it('succès : appelle resetPasswordForEmail avec le redirectTo attendu', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockResetPasswordForEmail.mockResolvedValue({ error: null });
+
+    await render(
+      <AuthProvider>
+        <ResetConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('envoyer'));
+      await Promise.resolve();
+    });
+
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith('a@test.local', {
+      redirectTo: 'whitealpha://auth/callback',
+    });
+    expect(screen.getByText('ok')).toBeTruthy();
+  });
+
+  it('erreur technique : message générique, jamais le détail brut', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockResetPasswordForEmail.mockResolvedValue({ error: { message: 'gotrue internal rate limit detail' } });
+
+    await render(
+      <AuthProvider>
+        <ResetConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('envoyer'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('gotrue internal rate limit detail')).toBeNull();
+  });
+});
+
+describe('AuthProvider — updatePassword (Phase 7.3)', () => {
+  function UpdatePasswordConsumer() {
+    const { updatePassword } = useAuth();
+    const [result, setResult] = useState<{ error: string | null } | null>(null);
+    return (
+      <>
+        <Pressable onPress={async () => setResult(await updatePassword('NouveauMotDePasse123'))}>
+          <Text>confirmer</Text>
+        </Pressable>
+        <Text>{result ? result.error ?? 'ok' : 'attente'}</Text>
+      </>
+    );
+  }
+
+  it('succès : appelle updateUser avec le nouveau mot de passe', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockUpdateUser.mockResolvedValue({ error: null });
+
+    await render(
+      <AuthProvider>
+        <UpdatePasswordConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('confirmer'));
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'NouveauMotDePasse123' });
+    expect(screen.getByText('ok')).toBeTruthy();
+  });
+
+  it('mot de passe identique à l\'ancien : message traduit explicite', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockUpdateUser.mockResolvedValue({
+      error: { message: 'New password should be different from the old password.' },
+    });
+
+    await render(
+      <AuthProvider>
+        <UpdatePasswordConsumer />
+      </AuthProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('confirmer'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Le nouveau mot de passe doit être différent de l'ancien.")).toBeTruthy();
   });
 });

@@ -1,18 +1,23 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
+import { Badge } from '@/components/badge';
+import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { ScreenHeader } from '@/components/screen-header';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { SECURITY_COPY } from '@/constants/copy';
 import { useAuth } from '@/contexts/auth-context';
 import { useMfa } from '@/hooks/use-mfa';
 import { useMyProfile } from '@/hooks/use-my-profile';
-import { useTheme } from '@/hooks/use-theme';
 import type { TotpEnrollment } from '@/lib/mfa';
 import type { MyProfile } from '@/services/profiles';
 
@@ -42,15 +47,7 @@ export default function SecurityScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
-            <ThemedText type="link" themeColor="textSecondary">
-              Retour
-            </ThemedText>
-          </Pressable>
-          <ThemedText type="subtitle">Sécurité</ThemedText>
-          <ThemedView style={styles.headerSpacer} />
-        </ThemedView>
+        <ScreenHeader title={SECURITY_COPY.title} onBack={() => router.back()} />
 
         {isLoading ? (
           <AppLoadingState accessibilityLabel="Chargement de la sécurité du compte" />
@@ -76,39 +73,33 @@ function SecurityContent({ profile, mfa }: SecurityContentProps) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <ThemedView style={styles.block}>
-        <ThemedText type="smallBold" themeColor="textSecondary">
+      <Card style={styles.block}>
+        <ThemedText type="label" themeColor="textSecondary">
           Statut de session
         </ThemedText>
         <ThemedView style={styles.row}>
-          <ThemedText type="small" themeColor="textSecondary">
+          <ThemedText type="bodySmall" themeColor="textSecondary">
             Connexion
           </ThemedText>
-          <ThemedText type="small">
+          <ThemedText type="bodySmall">
             {mfa.status?.currentLevel === 'aal2' ? 'Connecté — vérifié (MFA)' : 'Connecté'}
           </ThemedText>
         </ThemedView>
-        {isOwner && (
-          <ThemedView style={styles.ownerBadge}>
-            <ThemedText type="smallBold" style={styles.ownerBadgeText}>
-              Propriétaire
-            </ThemedText>
-          </ThemedView>
-        )}
-      </ThemedView>
+        {isOwner && <Badge label="Propriétaire" tone="accent" />}
+      </Card>
 
       {isOwner ? (
         <OwnerMfaSection mfa={mfa} />
       ) : (
-        <ThemedView style={styles.block}>
-          <ThemedText type="smallBold" themeColor="textSecondary">
+        <Card style={styles.block}>
+          <ThemedText type="label" themeColor="textSecondary">
             Authentification multifacteur
           </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
+          <ThemedText type="bodySmall" themeColor="textSecondary">
             Aucune option d&apos;administration sur ce compte. L&apos;activation de l&apos;authentification
             multifacteur sera bientôt disponible pour tous les comptes.
           </ThemedText>
-        </ThemedView>
+        </Card>
       )}
     </ScrollView>
   );
@@ -120,21 +111,15 @@ function OwnerMfaSection({ mfa }: { mfa: ReturnType<typeof useMfa> }) {
 
   if (justEnrolled) {
     return (
-      <ThemedView style={styles.block}>
-        <ThemedText type="smallBold" themeColor="textSecondary">
+      <Card style={styles.block}>
+        <ThemedText type="label" themeColor="textSecondary">
           Authentification multifacteur
         </ThemedText>
-        <ThemedText type="small" style={styles.success}>
+        <ThemedText type="bodySmall" themeColor="accent">
           Authentification multifacteur activée.
         </ThemedText>
-        <Pressable
-          onPress={() => setJustEnrolled(false)}
-          style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-            OK
-          </ThemedText>
-        </Pressable>
-      </ThemedView>
+        <Button label="OK" onPress={() => setJustEnrolled(false)} />
+      </Card>
     );
   }
 
@@ -165,46 +150,38 @@ function OwnerMfaSection({ mfa }: { mfa: ReturnType<typeof useMfa> }) {
   }
 
   return (
-    <ThemedView style={styles.block}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
+    <Card style={styles.block}>
+      <ThemedText type="label" themeColor="textSecondary">
         Authentification multifacteur
       </ThemedText>
       <ThemedView style={styles.row}>
-        <ThemedText type="small" themeColor="textSecondary">
+        <ThemedText type="bodySmall" themeColor="textSecondary">
           État
         </ThemedText>
-        <ThemedText type="small">{hasVerifiedFactor ? 'Vérifié' : 'Non configuré'}</ThemedText>
+        <ThemedText type="bodySmall">{hasVerifiedFactor ? 'Vérifié' : 'Non configuré'}</ThemedText>
       </ThemedView>
       {mfa.enrollmentError && (
-        <ThemedText type="small" style={styles.error}>
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
           {mfa.enrollmentError}
         </ThemedText>
       )}
       {hasVerifiedFactor ? (
-        <Pressable
+        <Button
+          label="Désactiver"
+          variant="danger"
           onPress={() => {
             const factorId = mfa.status?.verifiedFactors[0]?.id;
             if (factorId) mfa.startDisable(factorId);
           }}
-          style={({ pressed }) => [styles.buttonDangerOutline, pressed && styles.pressed]}>
-          <ThemedText type="smallBold" style={styles.error}>
-            Désactiver
-          </ThemedText>
-        </Pressable>
+        />
       ) : (
-        <Pressable
+        <Button
+          label={mfa.isStartingEnrollment ? 'Préparation…' : 'Configurer l’authentification'}
           onPress={mfa.startEnrollment}
-          disabled={mfa.isStartingEnrollment}
-          style={({ pressed }) => [
-            styles.buttonPrimary,
-            (pressed || mfa.isStartingEnrollment) && styles.pressed,
-          ]}>
-          <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-            {mfa.isStartingEnrollment ? 'Préparation…' : 'Configurer l’authentification'}
-          </ThemedText>
-        </Pressable>
+          loading={mfa.isStartingEnrollment}
+        />
       )}
-    </ThemedView>
+    </Card>
   );
 }
 
@@ -217,15 +194,15 @@ type EnrollmentFlowProps = {
 };
 
 function EnrollmentFlow({ enrollment, isVerifying, verifyError, onVerify, onCancel }: EnrollmentFlowProps) {
-  const theme = useTheme();
   const [code, setCode] = useState('');
 
   return (
-    <ThemedView style={styles.block}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
-        Configurer l&apos;authentification
+    <Card style={styles.block}>
+      <ThemedText type="title">Protégez votre place dans la meute</ThemedText>
+      <ThemedText type="bodySmall" themeColor="textSecondary">
+        Saisissez votre code d&apos;authentification pour continuer.
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="bodySmall" themeColor="textSecondary">
         Scanne ce code avec ton application d&apos;authentification (Google Authenticator, 1Password…), puis
         saisis le code à 6 chiffres généré.
       </ThemedText>
@@ -238,46 +215,41 @@ function EnrollmentFlow({ enrollment, isVerifying, verifyError, onVerify, onCanc
         />
       </ThemedView>
 
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="bodySmall" themeColor="textSecondary">
         Impossible de scanner ? Saisis ce code manuellement :
       </ThemedText>
-      <ThemedText type="smallBold" selectable style={styles.secretText}>
+      <ThemedText type="label" selectable style={styles.centeredText}>
         {enrollment.secret}
       </ThemedText>
 
-      <TextInput
+      <TextField
         value={code}
         onChangeText={setCode}
         editable={!isVerifying}
         keyboardType="number-pad"
         maxLength={6}
         placeholder="Code à 6 chiffres"
-        style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+        accessibilityLabel="Code à 6 chiffres"
       />
 
       {verifyError && (
-        <ThemedText type="small" style={styles.error}>
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
           {verifyError}
         </ThemedText>
       )}
 
-      <Pressable
+      <Button
+        label={isVerifying ? 'Vérification…' : 'Vérifier'}
         onPress={() => onVerify(code)}
-        disabled={isVerifying || code.length !== 6}
-        style={({ pressed }) => [
-          styles.buttonPrimary,
-          (pressed || isVerifying || code.length !== 6) && styles.pressed,
-        ]}>
-        <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-          {isVerifying ? 'Vérification…' : 'Vérifier'}
-        </ThemedText>
-      </Pressable>
-      <Pressable onPress={() => onCancel()} disabled={isVerifying} hitSlop={8}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+        loading={isVerifying}
+        disabled={code.length !== 6}
+      />
+      <Pressable onPress={() => onCancel()} disabled={isVerifying} hitSlop={8} accessibilityRole="button">
+        <ThemedText type="link" themeColor="textSecondary" style={styles.centeredText}>
           Annuler
         </ThemedText>
       </Pressable>
-    </ThemedView>
+    </Card>
   );
 }
 
@@ -289,51 +261,46 @@ type DisableFlowProps = {
 };
 
 function DisableFlow({ isDisabling, disableError, onConfirm, onCancel }: DisableFlowProps) {
-  const theme = useTheme();
   const [code, setCode] = useState('');
 
   return (
-    <ThemedView style={styles.block}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
+    <Card style={styles.block}>
+      <ThemedText type="label" themeColor="textSecondary">
         Désactiver l&apos;authentification multifacteur
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="bodySmall" themeColor="textSecondary">
         Pour confirmer la désactivation, saisis un nouveau code généré par ton application d&apos;authentification.
       </ThemedText>
 
-      <TextInput
+      <TextField
         value={code}
         onChangeText={setCode}
         editable={!isDisabling}
         keyboardType="number-pad"
         maxLength={6}
         placeholder="Code à 6 chiffres"
-        style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+        accessibilityLabel="Code à 6 chiffres"
       />
 
       {disableError && (
-        <ThemedText type="small" style={styles.error}>
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
           {disableError}
         </ThemedText>
       )}
 
-      <Pressable
+      <Button
+        label={isDisabling ? 'Désactivation…' : 'Confirmer la désactivation'}
+        variant="danger"
         onPress={() => onConfirm(code)}
-        disabled={isDisabling || code.length !== 6}
-        style={({ pressed }) => [
-          styles.buttonDangerOutline,
-          (pressed || isDisabling || code.length !== 6) && styles.pressed,
-        ]}>
-        <ThemedText type="smallBold" style={styles.error}>
-          {isDisabling ? 'Désactivation…' : 'Confirmer la désactivation'}
-        </ThemedText>
-      </Pressable>
-      <Pressable onPress={onCancel} disabled={isDisabling} hitSlop={8}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+        loading={isDisabling}
+        disabled={code.length !== 6}
+      />
+      <Pressable onPress={onCancel} disabled={isDisabling} hitSlop={8} accessibilityRole="button">
+        <ThemedText type="link" themeColor="textSecondary" style={styles.centeredText}>
           Annuler
         </ThemedText>
       </Pressable>
-    </ThemedView>
+    </Card>
   );
 }
 
@@ -349,16 +316,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: '100%',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.two,
-  },
-  headerSpacer: {
-    width: 50,
-  },
   scrollContent: {
     gap: Spacing.five,
     paddingBottom: Spacing.five,
@@ -373,16 +330,6 @@ const styles = StyleSheet.create({
   centeredText: {
     textAlign: 'center',
   },
-  ownerBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.half,
-    paddingHorizontal: Spacing.two,
-  },
-  ownerBadgeText: {
-    color: '#ffffff',
-  },
   qrContainer: {
     alignItems: 'center',
     paddingVertical: Spacing.two,
@@ -390,40 +337,5 @@ const styles = StyleSheet.create({
   qrImage: {
     width: 220,
     height: 220,
-  },
-  secretText: {
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontSize: 16,
-  },
-  buttonPrimary: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-  },
-  buttonPrimaryLabel: {
-    color: '#ffffff',
-  },
-  buttonDangerOutline: {
-    borderWidth: 1,
-    borderColor: '#D14343',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  error: {
-    color: '#D14343',
-  },
-  success: {
-    color: '#3FB27F',
   },
 });

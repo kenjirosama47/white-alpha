@@ -15,3 +15,34 @@ jest.mock('@react-native-community/netinfo', () => ({
     fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
   },
 }));
+
+// Mock global minimal de react-native-reanimated (Phase 7.3) : le module
+// réel — et même son propre mock officiel (`react-native-reanimated/mock`)
+// — plante au chargement dans cet environnement Jest (aucun binding natif
+// react-native-worklets disponible, y compris via le mock fourni par la
+// bibliothèque ; voir l'échec initial documenté dans
+// welcome-screen.test.tsx, déjà contourné là par un mock ciblé
+// d'AnimatedIcon). Fournit uniquement ce dont l'application se sert
+// réellement (`Animated.View`, `FadeIn.duration()`, `Keyframe`) sans aucune
+// animation réelle : les tests ne portent jamais sur le rendu de
+// l'animation elle-même, seulement sur le contenu final.
+jest.mock('react-native-reanimated', () => {
+  const { View } = require('react-native');
+  const chainable = () => {
+    const api = { duration: () => api, easing: () => api, withCallback: () => api };
+    return api;
+  };
+  return {
+    __esModule: true,
+    default: { View, Text: View, Image: View, ScrollView: View },
+    View,
+    FadeIn: chainable(),
+    FadeOut: chainable(),
+    Easing: { elastic: () => (t) => t },
+    Keyframe: class {
+      duration() {
+        return this;
+      }
+    },
+  };
+});

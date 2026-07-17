@@ -15,6 +15,10 @@ type AuthContextValue = {
   signUp: (email: string, password: string, username: string) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<AuthResult>;
+  /** Envoie un lien de récupération à `email` (voir écran Mot de passe oublié, Phase 7.3). Toujours le même message de succès générique, qu'un compte existe ou non pour cet email (évite de révéler si une adresse est enregistrée). */
+  requestPasswordReset: (email: string) => Promise<AuthResult>;
+  /** Définit un nouveau mot de passe : uniquement valide dans une session de récupération (lien ouvert depuis `auth/callback`, voir écran Réinitialisation, Phase 7.3). */
+  updatePassword: (newPassword: string) => Promise<AuthResult>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -26,6 +30,9 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   'Password should be at least 6 characters': 'Le mot de passe doit contenir au moins 6 caractères.',
   'Unable to validate email address: invalid format': 'Adresse email invalide.',
   'Email link is invalid or has expired': 'Le lien de confirmation est invalide ou a expiré.',
+  'New password should be different from the old password.':
+    "Le nouveau mot de passe doit être différent de l'ancien.",
+  'Auth session missing!': 'Session expirée. Reconnecte-toi.',
 };
 
 function translateAuthError(message: string): string {
@@ -155,6 +162,30 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return { error: error ? translateAuthError(error.message) : null };
         } catch {
           logAuthStorageEvent('Renvoi de confirmation échoué (réseau ou stockage).');
+          return { error: UNEXPECTED_ERROR_MESSAGE };
+        }
+      },
+      async requestPasswordReset(email) {
+        try {
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: AUTH_CALLBACK_URL,
+          });
+          // Supabase Auth ne signale jamais explicitement "email inconnu" pour
+          // cet appel (comportement voulu, anti-énumération de comptes) : une
+          // erreur ici ne concerne donc que des cas techniques (réseau,
+          // limite de débit), jamais "cet email n'existe pas".
+          return { error: error ? translateAuthError(error.message) : null };
+        } catch {
+          logAuthStorageEvent('Demande de réinitialisation échouée (réseau ou stockage).');
+          return { error: UNEXPECTED_ERROR_MESSAGE };
+        }
+      },
+      async updatePassword(newPassword) {
+        try {
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          return { error: error ? translateAuthError(error.message) : null };
+        } catch {
+          logAuthStorageEvent('Mise à jour du mot de passe échouée (réseau ou stockage).');
           return { error: UNEXPECTED_ERROR_MESSAGE };
         }
       },

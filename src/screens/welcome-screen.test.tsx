@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import WelcomeScreen from '@/app/(auth)/index';
+import { Colors } from '@/constants/theme';
 
 // Ce fichier vit délibérément hors de src/app (voir app-layout.test.tsx pour
 // l'explication complète : Expo Router embarquerait sinon ce test dans le
@@ -22,7 +23,9 @@ import WelcomeScreen from '@/app/(auth)/index';
 //   StyleSheet.flatten...") — confirmé en reproduisant l'erreur réelle.
 // Corrigé en appelant StyleSheet.flatten([...]) directement (jamais dans un
 // callback, jamais un tableau brut) pour un enfant direct de <Link asChild>,
-// l'état pressed étant géré via useState + onPressIn/onPressOut.
+// l'état pressed étant géré via useState + onPressIn/onPressOut. Toujours
+// vrai après la refonte Phase 7.3 (garde-fou reconduit ci-dessous avec les
+// nouvelles couleurs du Design System).
 jest.mock('expo-router', () => {
   const ReactActual = jest.requireActual('react');
   return {
@@ -31,17 +34,32 @@ jest.mock('expo-router', () => {
   };
 });
 
-// AnimatedIcon (react-native-reanimated/worklets) n'a pas de mock natif
-// disponible dans cet environnement Jest ; hors sujet pour ces tests, qui ne
-// portent que sur le style des boutons.
-jest.mock('@/components/animated-icon', () => ({
-  AnimatedIcon: () => null,
-}));
-
 function flattenStyle(style: unknown): Record<string, unknown> {
   const flat = ([style] as unknown[]).flat(Infinity).filter(Boolean) as Record<string, unknown>[];
   return flat.reduce((acc, s) => ({ ...acc, ...s }), {});
 }
+
+describe('WelcomeScreen — textes officiels White Alpha (Phase 7.3)', () => {
+  it('affiche le titre et le sous-titre officiels', async () => {
+    await render(<WelcomeScreen />);
+
+    expect(screen.getByText('Bienvenue dans White Alpha')).toBeTruthy();
+    expect(screen.getByText('La meute privée. Vos échanges restent entre vous.')).toBeTruthy();
+  });
+
+  it("affiche l'illustration officielle du loup", async () => {
+    await render(<WelcomeScreen />);
+
+    expect(screen.getByLabelText('Loup blanc White Alpha')).toBeTruthy();
+  });
+
+  it("ne contient aucune référence visible à Claude ou à l'ancien nom", async () => {
+    await render(<WelcomeScreen />);
+
+    expect(screen.queryByText(/claude/i)).toBeNull();
+    expect(screen.queryByText(/Discussion Privée/i)).toBeNull();
+  });
+});
 
 describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
   it('le style du bouton principal est un objet déjà aplati, jamais une fonction ni un tableau (garde-fou anti-régression Link asChild + Slot)', async () => {
@@ -62,28 +80,28 @@ describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
     expect(Array.isArray(style)).toBe(false);
   });
 
-  it('le bouton « Se connecter » a un fond bleu explicite au repos', async () => {
+  it('le bouton « Se connecter » utilise le vert forêt (accent) au repos', async () => {
     await render(<WelcomeScreen />);
 
     const label = screen.getByText('Se connecter');
-    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ backgroundColor: '#208AEF' });
+    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ backgroundColor: Colors.light.accent });
   });
 
-  it('le texte « Se connecter » est explicitement blanc', async () => {
+  it('le texte « Se connecter » utilise la couleur de texte sur accent (onAccent)', async () => {
     await render(<WelcomeScreen />);
 
     const label = screen.getByText('Se connecter');
-    expect(flattenStyle(label.props.style).color).toBe('#ffffff');
+    expect(flattenStyle(label.props.style).color).toBe(Colors.light.onAccent);
   });
 
-  it('le bouton « Créer un compte » a une bordure visible sur fond blanc', async () => {
+  it('le bouton « Créer un compte » a une bordure visible', async () => {
     await render(<WelcomeScreen />);
 
     const label = screen.getByText('Créer un compte');
-    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ borderWidth: 1, borderColor: '#60646C' });
+    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ borderWidth: 1, borderColor: Colors.light.border });
   });
 
-  it('état pressé : le bouton principal applique une opacité réduite sans perdre son fond bleu', async () => {
+  it('état pressé : le bouton principal applique une opacité réduite sans perdre son fond accent', async () => {
     await render(<WelcomeScreen />);
 
     const label = screen.getByText('Se connecter');
@@ -95,7 +113,7 @@ describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
       await Promise.resolve();
     });
 
-    expect(flattenStyle(pressable.props.style)).toMatchObject({ backgroundColor: '#208AEF', opacity: 0.7 });
+    expect(flattenStyle(pressable.props.style)).toMatchObject({ backgroundColor: Colors.light.accent, opacity: 0.7 });
   });
 
   it('état pressé : le bouton secondaire applique une opacité réduite sans perdre sa bordure', async () => {
@@ -113,13 +131,13 @@ describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
     expect(flattenStyle(pressable.props.style)).toMatchObject({ borderWidth: 1, opacity: 0.7 });
   });
 
-  it('un appui complet sur le bouton principal ne fait pas perdre le fond bleu au repos', async () => {
+  it('un appui complet sur le bouton principal ne fait pas perdre le fond accent au repos', async () => {
     await render(<WelcomeScreen />);
 
     const label = screen.getByText('Se connecter');
     fireEvent.press(label);
 
-    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ backgroundColor: '#208AEF' });
+    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ backgroundColor: Colors.light.accent });
   });
 
   it('un appui complet sur le bouton secondaire ne fait pas perdre la bordure au repos', async () => {
@@ -128,6 +146,6 @@ describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
     const label = screen.getByText('Créer un compte');
     fireEvent.press(label);
 
-    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ borderWidth: 1, borderColor: '#60646C' });
+    expect(flattenStyle(label.parent?.props.style)).toMatchObject({ borderWidth: 1, borderColor: Colors.light.border });
   });
 });

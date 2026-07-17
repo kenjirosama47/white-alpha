@@ -1,16 +1,18 @@
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable } from 'react-native';
 
+import { AuthScreenShell } from '@/components/auth-screen-shell';
+import { Button } from '@/components/button';
+import { PasswordField } from '@/components/password-field';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { LOGIN_COPY } from '@/constants/copy';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme } from '@/hooks/use-theme';
+
+const illustration = require('@/assets/images/white-alpha-wolf-auth.jpg');
 
 export default function LoginScreen() {
-  const theme = useTheme();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,102 +33,60 @@ export default function LoginScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="subtitle">Se connecter</ThemedText>
+    <AuthScreenShell
+      illustrationSource={illustration}
+      title={LOGIN_COPY.title}
+      subtitle="Connectez-vous pour accéder à vos conversations privées."
+      onBack={() => router.back()}
+      footer={
+        <>
+          <Link href="/forgot-password" asChild>
+            <Pressable hitSlop={8} accessibilityRole="button">
+              <ThemedText type="link" themeColor="textSecondary">
+                Mot de passe oublié ?
+              </ThemedText>
+            </Pressable>
+          </Link>
+          <Link href="/register" asChild>
+            <Pressable hitSlop={8} accessibilityRole="button">
+              <ThemedText type="link" themeColor="textSecondary">
+                Pas encore de compte ? Créer un compte
+              </ThemedText>
+            </Pressable>
+          </Link>
+        </>
+      }>
+      <TextField
+        label="Email"
+        placeholder="ton@email.com"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        editable={!submitting}
+      />
+      <PasswordField
+        label="Mot de passe"
+        placeholder="Mot de passe"
+        value={password}
+        onChangeText={setPassword}
+        editable={!submitting}
+      />
 
-        <ThemedView style={styles.form}>
-          <TextInput
-            placeholder="Email"
-            placeholderTextColor={theme.textSecondary}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!submitting}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          />
-          <TextInput
-            placeholder="Mot de passe"
-            placeholderTextColor={theme.textSecondary}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!submitting}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          />
+      {error && (
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
+          {error}
+        </ThemedText>
+      )}
 
-          {error && (
-            <ThemedText type="small" style={styles.error}>
-              {error}
-            </ThemedText>
-          )}
-
-          <Pressable
-            onPress={handleSubmit}
-            disabled={submitting}
-            style={({ pressed }) => [
-              styles.buttonPrimary,
-              (pressed || submitting) && styles.pressed,
-            ]}>
-            <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-              {submitting ? 'Connexion...' : 'Se connecter'}
-            </ThemedText>
-          </Pressable>
-        </ThemedView>
-
-        <Link href="/register" style={styles.link}>
-          <ThemedText type="link" themeColor="textSecondary">
-            Pas encore de compte ? Créer un compte
-          </ThemedText>
-        </Link>
-      </SafeAreaView>
-    </ThemedView>
+      <Button
+        label={submitting ? 'Connexion…' : 'Se connecter'}
+        onPress={handleSubmit}
+        loading={submitting}
+        disabled={!email || !password}
+      />
+    </AuthScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    justifyContent: 'center',
-    gap: Spacing.five,
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  form: {
-    gap: Spacing.three,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontSize: 16,
-  },
-  error: {
-    color: '#D14343',
-  },
-  buttonPrimary: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  buttonPrimaryLabel: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  link: {
-    alignSelf: 'center',
-  },
-});

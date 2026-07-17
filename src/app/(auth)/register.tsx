@@ -1,19 +1,20 @@
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable } from 'react-native';
 
+import { AuthScreenShell } from '@/components/auth-screen-shell';
+import { Button } from '@/components/button';
+import { PasswordField } from '@/components/password-field';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { REGISTER_COPY } from '@/constants/copy';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme } from '@/hooks/use-theme';
 
+const illustration = require('@/assets/images/white-alpha-wolf-auth.jpg');
 const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function RegisterScreen() {
-  const theme = useTheme();
   const { signUp, resendConfirmation } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -71,148 +72,90 @@ export default function RegisterScreen() {
 
   if (registeredEmail) {
     return (
-      <ThemedView style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
-          <ThemedText type="subtitle">Vérifie ta boîte mail</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            Un email de confirmation a été envoyé à {registeredEmail}. Clique sur le lien qu&apos;il
-            contient pour activer ton compte.
+      <AuthScreenShell
+        illustrationSource={illustration}
+        title="Vérifie ta boîte mail"
+        subtitle={`Un email de confirmation a été envoyé à ${registeredEmail}. Clique sur le lien qu'il contient pour activer ton compte.`}>
+        {resendNotice && (
+          <ThemedText type="bodySmall" accessibilityRole="alert">
+            {resendNotice}
           </ThemedText>
+        )}
 
-          {resendNotice && <ThemedText type="small">{resendNotice}</ThemedText>}
+        <Button
+          label={resendCooldown > 0 ? `Renvoyer (${resendCooldown}s)` : resending ? 'Envoi…' : "Renvoyer l'email de confirmation"}
+          onPress={handleResend}
+          loading={resending}
+          disabled={resendCooldown > 0}
+          variant="secondary"
+        />
 
-          <Pressable
-            onPress={handleResend}
-            disabled={resending || resendCooldown > 0}
-            style={({ pressed }) => [
-              styles.buttonPrimary,
-              (pressed || resending || resendCooldown > 0) && styles.pressed,
-            ]}>
-            <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-              {resendCooldown > 0
-                ? `Renvoyer (${resendCooldown}s)`
-                : resending
-                  ? 'Envoi...'
-                  : "Renvoyer l'email de confirmation"}
-            </ThemedText>
-          </Pressable>
-
-          <Link href="/login" style={styles.link}>
-            <ThemedText type="link" themeColor="textSecondary">
+        <Link href="/login" asChild>
+          <Pressable hitSlop={8} accessibilityRole="button">
+            <ThemedText type="link" themeColor="textSecondary" style={{ textAlign: 'center' }}>
               Retour à la connexion
             </ThemedText>
-          </Link>
-        </SafeAreaView>
-      </ThemedView>
+          </Pressable>
+        </Link>
+      </AuthScreenShell>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="subtitle">Créer un compte</ThemedText>
-
-        <ThemedView style={styles.form}>
-          <TextInput
-            placeholder="Nom d'utilisateur"
-            placeholderTextColor={theme.textSecondary}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            editable={!submitting}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          />
-          <TextInput
-            placeholder="Email"
-            placeholderTextColor={theme.textSecondary}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!submitting}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          />
-          <TextInput
-            placeholder="Mot de passe"
-            placeholderTextColor={theme.textSecondary}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!submitting}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          />
-
-          {error && (
-            <ThemedText type="small" style={styles.error}>
-              {error}
-            </ThemedText>
-          )}
-
-          <Pressable
-            onPress={handleSubmit}
-            disabled={submitting}
-            style={({ pressed }) => [
-              styles.buttonPrimary,
-              (pressed || submitting) && styles.pressed,
-            ]}>
-            <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-              {submitting ? 'Création...' : 'Créer mon compte'}
+    <AuthScreenShell
+      illustrationSource={illustration}
+      title={REGISTER_COPY.title}
+      subtitle="Créez votre espace privé et sécurisé."
+      onBack={() => router.back()}
+      footer={
+        <Link href="/login" asChild>
+          <Pressable hitSlop={8} accessibilityRole="button">
+            <ThemedText type="link" themeColor="textSecondary">
+              Déjà un compte ? Se connecter
             </ThemedText>
           </Pressable>
-        </ThemedView>
-
-        <Link href="/login" style={styles.link}>
-          <ThemedText type="link" themeColor="textSecondary">
-            Déjà un compte ? Se connecter
-          </ThemedText>
         </Link>
-      </SafeAreaView>
-    </ThemedView>
+      }>
+      <TextField
+        label="Nom d'utilisateur"
+        placeholder="Nom d'utilisateur"
+        value={username}
+        onChangeText={setUsername}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!submitting}
+      />
+      <TextField
+        label="Email"
+        placeholder="ton@email.com"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        editable={!submitting}
+      />
+      <PasswordField
+        label="Mot de passe"
+        placeholder="Mot de passe"
+        value={password}
+        onChangeText={setPassword}
+        editable={!submitting}
+      />
+
+      {error && (
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
+          {error}
+        </ThemedText>
+      )}
+
+      <Button
+        label={submitting ? 'Création…' : 'Créer mon compte'}
+        onPress={handleSubmit}
+        loading={submitting}
+        disabled={!username || !email || !password}
+      />
+    </AuthScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    justifyContent: 'center',
-    gap: Spacing.five,
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  form: {
-    gap: Spacing.three,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontSize: 16,
-  },
-  error: {
-    color: '#D14343',
-  },
-  buttonPrimary: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  buttonPrimaryLabel: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  link: {
-    alignSelf: 'center',
-  },
-});

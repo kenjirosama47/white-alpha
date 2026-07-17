@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
 
 import { TextField } from '@/components/text-field';
 
@@ -29,5 +30,18 @@ describe('TextField', () => {
     await render(<TextField value="" onChangeText={jest.fn()} placeholder="Mot de passe" secureTextEntry />);
 
     expect(screen.getByPlaceholderText('Mot de passe').props.secureTextEntry).toBe(true);
+  });
+
+  it('affiche rightAccessory quand fourni (ex. bouton afficher/masquer)', async () => {
+    await render(
+      <TextField
+        value=""
+        onChangeText={jest.fn()}
+        placeholder="Champ"
+        rightAccessory={<Text>Accessoire</Text>}
+      />,
+    );
+
+    expect(screen.getByText('Accessoire')).toBeTruthy();
   });
 });

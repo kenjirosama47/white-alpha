@@ -1,14 +1,15 @@
 import { useURL } from 'expo-linking';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
 
 type Status = 'processing' | 'success' | 'error';
 
@@ -60,6 +61,14 @@ export default function AuthCallbackScreen() {
         return;
       }
 
+      // Une session de récupération de mot de passe (`type=recovery`) doit
+      // toujours mener à l'écran de réinitialisation, jamais directement aux
+      // conversations — même si `setSession`/`verifyOtp` établit une session
+      // valide au sens de Supabase Auth (voir Phase 7.3, reset-password.tsx,
+      // placé volontairement hors du groupe (auth) pour rester accessible
+      // malgré cette session déjà "authentifiée").
+      const isRecovery = params.type === 'recovery';
+
       try {
         if (params.access_token && params.refresh_token) {
           const { error } = await supabase.auth.setSession({
@@ -83,8 +92,8 @@ export default function AuthCallbackScreen() {
         }
 
         setStatus('success');
-        setMessage('Compte confirmé. Redirection...');
-        router.replace('/');
+        setMessage(isRecovery ? 'Identité confirmée. Redirection...' : 'Compte confirmé. Redirection...');
+        router.replace(isRecovery ? '/auth/reset-password' : '/');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         setStatus('error');
@@ -104,7 +113,7 @@ export default function AuthCallbackScreen() {
       <SafeAreaView style={styles.safeArea}>
         {status === 'processing' && (
           <>
-            <ActivityIndicator size="large" color={theme.text} />
+            <ActivityIndicator size="large" color={theme.accent} />
             <ThemedText type="subtitle" style={styles.text}>
               Confirmation en cours...
             </ThemedText>
@@ -122,16 +131,10 @@ export default function AuthCallbackScreen() {
             <ThemedText type="subtitle" style={styles.text}>
               Confirmation impossible
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.text}>
+            <ThemedText type="body" themeColor="textSecondary" style={styles.text}>
               {message}
             </ThemedText>
-            <Pressable
-              onPress={() => router.replace('/login')}
-              style={({ pressed }) => [styles.buttonPrimary, pressed && styles.pressed]}>
-              <ThemedText type="smallBold" style={styles.buttonPrimaryLabel}>
-                Retour à la connexion
-              </ThemedText>
-            </Pressable>
+            <Button label="Retour à la connexion" onPress={() => router.replace('/login')} />
           </>
         )}
       </SafeAreaView>
@@ -157,19 +160,5 @@ const styles = StyleSheet.create({
   },
   text: {
     textAlign: 'center',
-  },
-  buttonPrimary: {
-    backgroundColor: '#208AEF',
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.five,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  buttonPrimaryLabel: {
-    color: '#ffffff',
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

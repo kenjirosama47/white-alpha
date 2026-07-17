@@ -101,6 +101,20 @@ describe('SecurityScreen — compte owner', () => {
     expect(startEnrollment).toHaveBeenCalledTimes(1);
   });
 
+  it('pendant l’enrôlement : affiche le texte officiel « Protégez votre place dans la meute » (Phase 7.3)', async () => {
+    mockUseMyProfile.mockReturnValue(profileState({ profile: ownerProfile }));
+    mockUseMfa.mockReturnValue(
+      mfaState({
+        enrollment: { factorId: 'factor-1', qrCodeDataUri: 'data:image/svg+xml;utf-8,x', secret: 'JBSWY3DPEHPK3PXP' },
+      }),
+    );
+
+    await render(<SecurityScreen />);
+
+    await screen.findByText('Protégez votre place dans la meute');
+    expect(screen.getByText("Saisissez votre code d'authentification pour continuer.")).toBeTruthy();
+  });
+
   it('pendant l’enrôlement : affiche le QR code et le secret, jamais après validation', async () => {
     const confirmEnrollment = jest.fn().mockResolvedValue(true);
     mockUseMyProfile.mockReturnValue(profileState({ profile: ownerProfile }));
@@ -246,5 +260,26 @@ describe('SecurityScreen — navigation', () => {
     fireEvent.press(screen.getByText('Retour'));
 
     expect(router.back).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SecurityScreen — texte officiel (Phase 7.3)', () => {
+  it('affiche le titre officiel « Votre espace reste protégé »', async () => {
+    mockUseMyProfile.mockReturnValue(profileState());
+    mockUseMfa.mockReturnValue(mfaState());
+
+    await render(<SecurityScreen />);
+
+    expect(await screen.findByText('Votre espace reste protégé')).toBeTruthy();
+  });
+
+  it('ne contient aucune référence visible à Claude', async () => {
+    mockUseMyProfile.mockReturnValue(profileState({ profile: ownerProfile }));
+    mockUseMfa.mockReturnValue(mfaState());
+
+    await render(<SecurityScreen />);
+    await screen.findByText('Non configuré');
+
+    expect(screen.queryByText(/claude/i)).toBeNull();
   });
 });

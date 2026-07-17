@@ -92,6 +92,12 @@ function RootNavigator() {
         {/* Accessible quel que soit l'état d'authentification : le lien de
             confirmation email peut être ouvert avant toute connexion. */}
         <Stack.Screen name="auth/callback" />
+        {/* Hors des deux groupes protégés (Phase 7.3) : une session de
+            récupération de mot de passe authentifie l'utilisateur au sens de
+            Supabase Auth (isAuthenticated devient true), ce qui router-ait
+            sinon automatiquement vers (app) avant même l'affichage de cet
+            écran si celui-ci vivait dans (auth). */}
+        <Stack.Screen name="auth/reset-password" />
       </Stack>
     </>
   );
