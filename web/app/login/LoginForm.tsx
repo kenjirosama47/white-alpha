@@ -1,11 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 
 import { Button } from '@/components/Button';
+import { FormError } from '@/components/FormError';
+import { PasswordField } from '@/components/PasswordField';
+import formStyles from '@/styles/form.module.css';
 
 import { loginAction, type LoginState } from './actions';
-import styles from './LoginForm.module.css';
 
 const initialState: LoginState = { error: null };
 
@@ -13,11 +16,11 @@ export function LoginForm({ next }: { next: string }) {
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
 
   return (
-    <form action={formAction} className={styles.form}>
+    <form action={formAction} className={formStyles.form}>
       <input type="hidden" name="next" value={next} />
 
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor="email">
+      <div className={formStyles.field}>
+        <label className={formStyles.label} htmlFor="email">
           Email
         </label>
         <input
@@ -26,35 +29,25 @@ export function LoginForm({ next }: { next: string }) {
           type="email"
           autoComplete="email"
           required
-          className={styles.input}
+          className={formStyles.input}
           disabled={isPending}
         />
       </div>
 
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor="password">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className={styles.input}
-          disabled={isPending}
-        />
-      </div>
+      <PasswordField label="Mot de passe" name="password" autoComplete="current-password" disabled={isPending} />
 
-      {state.error && (
-        <p className={styles.error} role="alert">
-          {state.error}
-        </p>
-      )}
+      <FormError message={state.error} />
 
       <Button type="submit" disabled={isPending}>
         {isPending ? 'Connexion…' : 'Se connecter'}
       </Button>
+
+      <Link href="/forgot-password" className={formStyles.link}>
+        Mot de passe oublié ?
+      </Link>
+      <Link href="/inscription" className={formStyles.link}>
+        Créer un compte
+      </Link>
     </form>
   );
 }

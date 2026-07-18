@@ -1,41 +1,16 @@
 /**
  * Variables CSS White Alpha — mêmes valeurs que web/lib/theme.ts (voir sa
- * note sur l'indépendance des deux dépôts de build). `prefers-color-scheme`
- * pilote le thème par défaut, exactement comme `userInterfaceStyle:
- * "automatic"` côté mobile ; `data-theme` permet un futur bouton de bascule
- * manuelle sans dupliquer les valeurs.
+ * note sur l'indépendance des deux dépôts de build).
+ *
+ * Palette sombre forcée par défaut (corrigé après revue) : l'identité
+ * visuelle White Alpha validée est sombre (fond noir profond, carte gris
+ * pierre, accent vert forêt) — elle ne doit jamais dépendre de la
+ * préférence système `prefers-color-scheme` de l'appareil (contrairement à
+ * l'app mobile, qui elle s'adapte). `data-theme='light'` reste disponible
+ * pour un futur bouton de bascule manuelle explicite, mais n'est jamais
+ * activé automatiquement.
  */
 :root,
-:root[data-theme='light'] {
-  --color-background: #f6f4ef;
-  --color-surface: #ffffff;
-  --color-surface-high: #ffffff;
-  --color-text: #14150f;
-  --color-text-secondary: #6b6862;
-  --color-border: #e3e0d8;
-  --color-accent: #2f6b45;
-  --color-accent-bright: #2e9e5b;
-  --color-on-accent: #f5f3ed;
-  --color-danger: #b3453d;
-  --color-warning: #96692a;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #0d0f0c;
-    --color-surface: #171913;
-    --color-surface-high: #21231b;
-    --color-text: #f5f3ed;
-    --color-text-secondary: #9c988e;
-    --color-border: #33352b;
-    --color-accent: #2f6b45;
-    --color-accent-bright: #4cd97b;
-    --color-on-accent: #f5f3ed;
-    --color-danger: #c4574f;
-    --color-warning: #c99a4a;
-  }
-}
-
 :root[data-theme='dark'] {
   --color-background: #0d0f0c;
   --color-surface: #171913;
@@ -48,4 +23,18 @@
   --color-on-accent: #f5f3ed;
   --color-danger: #c4574f;
   --color-warning: #c99a4a;
+}
+
+:root[data-theme='light'] {
+  --color-background: #f6f4ef;
+  --color-surface: #ffffff;
+  --color-surface-high: #ffffff;
+  --color-text: #14150f;
+  --color-text-secondary: #6b6862;
+  --color-border: #e3e0d8;
+  --color-accent: #2f6b45;
+  --color-accent-bright: #2e9e5b;
+  --color-on-accent: #f5f3ed;
+  --color-danger: #b3453d;
+  --color-warning: #96692a;
 }

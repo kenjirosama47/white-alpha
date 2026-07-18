@@ -36,7 +36,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
+    // suppressHydrationWarning (recommandation officielle Next.js pour la
+    // balise <html>) : une extension navigateur peut ajouter un attribut
+    // (ex. `data-processed-...`) à cette balise avant l'hydratation React —
+    // un faux positif jamais causé par notre code, jamais un vrai bug
+    // d'hydratation (React ne compare que les attributs de CET élément
+    // précis, jamais ses enfants, donc une vraie divergence ailleurs dans
+    // l'arbre resterait détectée normalement).
+    <html lang="fr" suppressHydrationWarning>
       <body>
         {children}
         <ServiceWorkerRegistration />

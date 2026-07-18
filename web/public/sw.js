@@ -13,15 +13,26 @@
 const CACHE_VERSION = 'v1';
 const STATIC_CACHE_NAME = `white-alpha-static-${CACHE_VERSION}`;
 
-// Pages/assets statiques et publics uniquement — jamais une route sous /app,
-// jamais une réponse Supabase. Préchargées à l'installation du Service
-// Worker pour un premier chargement hors connexion correct.
+// Pages/assets statiques et publics uniquement — jamais une route
+// authentifiée ou intermédiaire d'authentification, jamais une réponse
+// Supabase. Préchargées à l'installation du Service Worker pour un premier
+// chargement hors connexion correct.
 const PRECACHE_URLS = ['/offline', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 // Préfixes/chemins jamais mis en cache, quelle que soit la stratégie
-// ci-dessous — zone authentifiée et tout ce qui pourrait contenir une donnée
-// privée.
-const NEVER_CACHE_PATH_PREFIXES = ['/app', '/login', '/forgot-password'];
+// ci-dessous — zone authentifiée (Phase 8.3 : /membre, /profil,
+// /installation-privee), étapes d'authentification sensibles
+// (/verification-mfa, /reset-password) et formulaires d'identifiants.
+const NEVER_CACHE_PATH_PREFIXES = [
+  '/membre',
+  '/profil',
+  '/installation-privee',
+  '/verification-mfa',
+  '/reset-password',
+  '/login',
+  '/inscription',
+  '/forgot-password',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

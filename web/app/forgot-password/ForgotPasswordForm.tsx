@@ -3,19 +3,21 @@
 import { useActionState } from 'react';
 
 import { Button } from '@/components/Button';
+import { FORGOT_PASSWORD_SUBMITTED_COPY } from '@/lib/copy';
+import styles from '@/styles/form.module.css';
 
-import { forgotPasswordAction, initialState } from './actions';
-import styles from '../login/LoginForm.module.css';
+import { forgotPasswordAction, type ForgotPasswordState } from './actions';
+
+// Défini ici (composant client), jamais exporté depuis actions.ts : un
+// fichier "use server" ne peut exporter que des fonctions asynchrones — voir
+// la même note dans `app/inscription/RegisterForm.tsx`.
+const initialState: ForgotPasswordState = { submitted: false };
 
 export function ForgotPasswordForm() {
   const [state, formAction, isPending] = useActionState(forgotPasswordAction, initialState);
 
   if (state.submitted) {
-    return (
-      <p role="status">
-        Si un compte existe pour cette adresse, un email de réinitialisation vient d’être envoyé.
-      </p>
-    );
+    return <p role="status">{FORGOT_PASSWORD_SUBMITTED_COPY.message}</p>;
   }
 
   return (
