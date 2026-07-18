@@ -1,0 +1,16 @@
+# Dépendances (déjà couvert par le .gitignore racine, dupliqué ici par sécurité)
+node_modules/
+
+# Next.js
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Variables d'environnement — jamais de valeur réelle suivie par git
+.env
+.env.local
+.env.*.local
+
+# Couverture de tests
+coverage/

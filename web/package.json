@@ -1,0 +1,36 @@
+{
+  "name": "white-alpha-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "White Alpha — PWA privée (Next.js), séparée de l'application mobile Expo. Partage uniquement le backend Supabase et l'identité visuelle White Alpha.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "icons:generate": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.3",
+    "@supabase/supabase-js": "2.110.5",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@types/node": "22.10.5",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.10",
+    "jest": "29.7.0",
+    "jest-environment-jsdom": "29.7.0",
+    "sharp": "0.35.3",
+    "ts-jest": "29.2.5",
+    "typescript": "5.7.3"
+  }
+}
