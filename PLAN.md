@@ -844,76 +844,126 @@ ci-dessous).
   anomalie résiduelle. Détail dans `TEST_FINAL_BUILD17.md`.
 - Phase 7 close.
 
-## Phase 8 — Distribution privée Android/iOS
+## Phase 8 — Distribution privée Android/iPhone
 
 White Alpha reste une application **strictement privée** : aucune
-publication publique (Google Play, App Store grand public), aucun
-référencement, aucun listing automatique. Toute distribution passe par des
-canaux fermés, réservés aux membres autorisés.
+publication publique (Google Play, App Store), aucun référencement, aucun
+listing automatique. Toute distribution passe par des canaux fermés,
+réservés aux membres autorisés.
 
-### 8.1 — Audit Android/iOS
-- État des lieux technique multiplateforme (dépendances Expo compatibles
-  iOS, permissions, configuration native).
-- Revue des policies RLS Supabase (accès conversations/messages/médias).
-- Gestion des erreurs réseau, états de chargement, écrans vides restants
-  (au-delà de la refonte visuelle de la Phase 7).
+**Décision d'architecture officielle et définitive** :
+- **Android** : APK privé signé, téléchargé depuis une page privée.
+- **iPhone/iPad** : PWA privée installable depuis Safari (écran d'accueil).
+- Aucun App Store, aucun TestFlight, aucune distribution Ad Hoc, aucun
+  Apple Business Manager, aucun certificat Apple, aucun build iOS natif,
+  aucun compte Apple Developer requis.
 
-### 8.2 — Corrections multiplateformes
-- Ajustements de code nécessaires pour une compatibilité iOS réelle
-  (composants, permissions, comportements spécifiques à la plateforme).
+### 8.1 — Audit Android et Web/PWA
+- Audit Android existant.
+- Audit compatibilité Web/PWA.
+- Sécurité Web.
+- Sessions.
+- Service Worker.
+- Médias.
+- Accessibilité.
+- Installation iPhone depuis Safari.
 
-### 8.3 — Configuration et build iOS
-- Ce qui peut être préparé sous Windows (configuration `app.json`/
-  `eas.json`, code, assets) vs. ce qui nécessite un compte Apple
-  Developer, un Mac ou un service de build distant (EAS Build cloud).
+### 8.2 — Fondation sécurisée de la PWA — **TERMINÉE**
+- Commit : `032e8157b35fe23fb84b82722c3ec010d9e65630`
+  (« Phase 8.2 : créer la fondation sécurisée de la PWA White Alpha »).
+- Application Next.js séparée dans `web/`, partageant uniquement le
+  backend Supabase et l'identité visuelle White Alpha (aucune conversion
+  de l'app Expo mobile en site statique).
+- Session Supabase SSR via cookies (`@supabase/ssr`), jamais de session en
+  `localStorage`.
+- CSP par requête (nonce), `noindex, nofollow` sur toutes les pages.
+- Manifest PWA (icônes maskables, couleurs White Alpha) et Service Worker
+  minimal : cache uniquement les assets statiques immuables, aucune page
+  privée (`/app`, `/login`, `/forgot-password`) jamais mise en cache,
+  aucune URL signée mise en cache.
+- Aucun déploiement effectué à ce stade (aucune commande
+  vercel/netlify/wrangler exécutée).
+- 8 suites / 29 tests Jest, `typecheck`/`lint`/`build` au vert.
+- Build Android 17 confirmé intact après cette fondation (78 suites / 677
+  tests, `tsc`/`lint`/export Android au vert).
 
-### 8.4 — Page privée White Alpha
+### 8.3 — Authentification réelle de la PWA
+- Connexion Supabase réelle, inscription, mot de passe oublié.
+- Restauration de session, déconnexion.
+- MFA.
+- Pages protégées.
+- Cookies sécurisés.
+- Tests avec comptes de test.
+
+### 8.4 — Conversations Web
+- Liste des conversations, recherche, ouverture d'une discussion.
+- Messages Realtime.
+- `avatar_url` / `avatar_preset`.
+- États vide, chargement, erreur et hors connexion.
+
+### 8.5 — Médias Web
+- Bouton trombone, photo, vidéo, aperçu, upload.
+- Nettoyage des fichiers temporaires.
+- Aucune URL signée mise en cache durablement.
+
+### 8.6 — Notifications Web Push
+- PWA installée, permission demandée après action utilisateur.
+- VAPID, abonnement lié à l'utilisateur.
+- Notification générique, désactivation à la déconnexion.
+- Aucun secret dans le navigateur.
+
+### 8.7 — Page privée et distribution Android/iPhone
 - Page **non publique**, non destinée au référencement : aucune
-  publication Google Play, aucune publication App Store publique.
+  publication Google Play, aucune publication App Store.
 - `<meta name="robots" content="noindex, nofollow">` obligatoire.
 - Accès protégé **côté serveur** (mot de passe, code d'invitation ou lien
   privé) — jamais une protection uniquement en JavaScript côté client.
-- Aucune clé secrète dans le code client.
-- Aucun listing de répertoire (dossier de téléchargement jamais
-  navigable directement).
-- Liens temporaires ou protégés si possible.
-- Texte principal : *« White Alpha — La meute privée »* — sous-titre :
-  *« Une messagerie privée réservée aux membres autorisés. »*
-- Bouton Android actif uniquement une fois l'APK validé ; bouton iPhone
-  lié à TestFlight ou marqué *« Version iPhone bientôt disponible »* tant
-  qu'aucun lien TestFlight valide n'existe.
-- Aucune promesse d'installation directe d'un IPA depuis le navigateur.
+- Aucune clé secrète dans le code client, aucun listing de répertoire.
 
-### 8.5 — Politique de confidentialité et support
-- Document de confidentialité adapté à une app privée (pas de vitrine
-  publique), point de contact support.
+Android :
+- Téléchargement direct d'un APK Release signé depuis la page privée.
+- Affichage : version actuelle, date du build, taille, SHA-256, guide
+  d'installation.
+- L'APK n'est **jamais** suivi par Git.
 
-### 8.6 — Distribution privée Android
-- Téléchargement direct d'un APK Release signé depuis la page privée
-  (lien temporaire/protégé si possible).
-- Affichage : version actuelle, date du build, taille, SHA-256,
-  compatibilité Android minimale, avertissement « source externe »,
-  guide d'installation.
-- L'APK n'est **jamais** suivi par Git ; emplacement de publication
-  séparé et sécurisé, hors dépôt.
-- Aucune publication Google Play.
+iPhone :
+- Bouton *« Installer White Alpha sur iPhone »*.
+- Guide Safari → Partager → Ajouter à l'écran d'accueil.
+- Aucun IPA, aucune promesse d'installation directe depuis le navigateur.
 
-### 8.7 — Distribution privée iPhone
-- Solutions étudiées : **TestFlight** (tests privés, limite ~10 000
-  testeurs, build expire après 90 jours), **distribution Ad Hoc** (liste
-  d'appareils enregistrés, limite 100 appareils/an, UDID à collecter),
-  **Apple Business Manager / Custom Apps** (si organisation éligible),
-  **Enterprise** (uniquement si les conditions Apple — usage interne
-  strict à une entité, jamais public — sont réellement remplies).
-- Nécessite dans tous les cas : compte Apple Developer (payant), et soit
-  un Mac soit un build iOS distant (EAS Build).
-- Pas d'IPA public non signé, pas de promesse d'installation directe
-  depuis une page web.
-- Recommandation à documenter précisément une fois l'audit 8.1 fait.
+### 8.8 — Déploiement privé
+- Cloudflare Pages/Workers, HTTPS.
+- Accès protégé côté serveur, domaine privé.
+- Variables d'environnement sécurisées (jamais de clé secrète côté
+  client).
+- Aucun listing public, aucun référencement.
+- Politique de confidentialité adaptée à une app privée (pas de vitrine
+  publique) et point de contact support, publiés sur ce même domaine
+  privé.
 
-### 8.8 — Validation finale
-- Vérification croisée de tous les points ci-dessus, test réel des deux
-  canaux de distribution, clôture de phase.
+### 8.9 — Validation finale
+- Tests Android, tests PWA, tests Safari iPhone.
+- Installation sur écran d'accueil.
+- Sessions, conversations, médias, notifications, sécurité.
+- Nettoyage local.
+
+### Historique — orientation initiale iOS natif (abandonnée)
+Avant la décision PWA, une distribution iOS native (build EAS, TestFlight
+ou Ad Hoc/Apple Business Manager/Enterprise, compte Apple Developer) avait
+été envisagée et partiellement auditée :
+- Audit multiplateforme Android/iOS (dépendances Expo, permissions,
+  configuration native, écrans, notifications, accessibilité) réalisé et
+  validé.
+- Corrections ciblées iOS natif (safe areas, clavier, SecureStore,
+  protection d'écran, notifications, accessibilité VoiceOver,
+  configuration `app.json` iOS) implémentées puis **intégralement
+  restaurées via Git** (aucune trace résiduelle dans le code actuel) lors
+  du nettoyage de périmètre précédant le commit `032e8157…`.
+- Options de distribution iPhone natif étudiées (TestFlight, Ad Hoc,
+  Apple Business Manager/Custom Apps, Enterprise) : jamais mises en
+  œuvre.
+
+**Orientation abandonnée au profit de la PWA privée.**
 
 ## Phase 9 — Optimisation, pièces jointes et confidentialité locale
 
