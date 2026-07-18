@@ -24,12 +24,14 @@ export type ThemedTextProps = TextProps & {
     | 'code'
     | TypographyVariant;
   themeColor?: ThemeColor;
+  /** Impose une palette indépendamment du thème système (Anomalie 2, build 16) — voir `useTheme`. */
+  forcedScheme?: 'light' | 'dark';
 };
 
 const NEW_TYPOGRAPHY_VARIANTS = new Set<string>(Object.keys(Typography));
 
-export function ThemedText({ style, type = 'default', themeColor, maxFontSizeMultiplier, ...rest }: ThemedTextProps) {
-  const theme = useTheme();
+export function ThemedText({ style, type = 'default', themeColor, maxFontSizeMultiplier, forcedScheme, ...rest }: ThemedTextProps) {
+  const theme = useTheme(forcedScheme);
   const newVariant = NEW_TYPOGRAPHY_VARIANTS.has(type) ? Typography[type as TypographyVariant] : null;
 
   return (

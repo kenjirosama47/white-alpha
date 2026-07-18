@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Colors } from '@/constants/theme';
 
 describe('ThemedText', () => {
   it.each(['default', 'title', 'small', 'smallBold', 'subtitle', 'link', 'linkPrimary', 'code'] as const)(
@@ -35,5 +36,13 @@ describe('ThemedText', () => {
     );
 
     expect(screen.getByText('Titre').props.maxFontSizeMultiplier).toBe(1);
+  });
+
+  it('forcedScheme="dark" impose la couleur de texte sombre quelle que soit le thème système (Anomalie 2, build 16)', async () => {
+    await render(<ThemedText forcedScheme="dark">Texte</ThemedText>);
+
+    expect(screen.getByText('Texte').props.style).toEqual(
+      expect.arrayContaining([{ color: Colors.dark.text }]),
+    );
   });
 });

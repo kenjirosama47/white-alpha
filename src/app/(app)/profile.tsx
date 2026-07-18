@@ -16,13 +16,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
-import { useMyProfile } from '@/hooks/use-my-profile';
+import { useMyProfileContext } from '@/contexts/my-profile-context';
 import { useProfileEditor } from '@/hooks/use-profile-editor';
 import type { MyProfile } from '@/services/profiles';
 import { DISPLAY_NAME_MAX_LENGTH, USERNAME_MAX_LENGTH } from '@/types/chat';
 
 export default function ProfileScreen() {
-  const { profile, isLoading, error, refresh, setProfile } = useMyProfile();
+  const { profile, isLoading, error, refresh, setProfile } = useMyProfileContext();
   const [isEditing, setIsEditing] = useState(false);
 
   return (

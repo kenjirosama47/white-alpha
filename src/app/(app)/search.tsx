@@ -38,6 +38,7 @@ export default function SearchScreen() {
           otherUsername: profile.username,
           otherDisplayName: profile.displayName,
           otherAvatarUrl: profile.avatarUrl ?? '',
+          otherAvatarPreset: profile.avatarPreset,
         },
       });
     } catch (err) {

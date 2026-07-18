@@ -27,7 +27,8 @@ const FALLBACK_ASPECT_RATIO = 16 / 9;
  * PiP et lecture en arrière-plan désactivés.
  */
 export function MessageVideo({ storagePath, width, height, durationMs }: MessageVideoProps) {
-  const theme = useTheme();
+  // Palette sombre imposée (Anomalie 2, build 16) — voir message-bubble.tsx.
+  const theme = useTheme('dark');
   const { url, isLoading, error: urlError, refresh } = useSignedAttachmentUrl(storagePath);
   const [hasStarted, setHasStarted] = useState(false);
   const aspectRatio = width && height ? width / height : FALLBACK_ASPECT_RATIO;
@@ -94,7 +95,7 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
         style={[styles.placeholder, { aspectRatio, backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}
         accessibilityRole="button"
         accessibilityLabel={message}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+        <ThemedText type="small" themeColor="textSecondary" forcedScheme="dark" style={styles.centeredText}>
           {message}
         </ThemedText>
       </Pressable>
@@ -120,11 +121,11 @@ export function MessageVideo({ storagePath, width, height, durationMs }: Message
         accessibilityRole="button"
         accessibilityLabel={`Lire la vidéo, durée ${formatDuration(durationMs)}`}>
         <View style={styles.playButton}>
-          <ThemedText type="smallBold" style={styles.playIcon}>
+          <ThemedText type="smallBold" forcedScheme="dark" style={styles.playIcon}>
             ▶
           </ThemedText>
         </View>
-        <ThemedText type="small" style={styles.duration}>
+        <ThemedText type="small" forcedScheme="dark" style={styles.duration}>
           {formatDuration(durationMs)}
         </ThemedText>
       </Pressable>

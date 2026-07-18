@@ -3,8 +3,9 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { resolveWolfAvatarSource, type WolfAvatarId } from '@/constants/avatars';
+import type { WolfAvatarId } from '@/constants/avatars';
 import { useTheme } from '@/hooks/use-theme';
+import { resolveAvatarDisplay } from '@/utils/avatar-resolution';
 
 type AvatarImageProps = {
   avatarUrl: string | null;
@@ -21,30 +22,47 @@ type AvatarImageProps = {
   wolfPreset?: WolfAvatarId | null;
   /** Anneau de mise en avant (ex. avatar du propriétaire) — jamais utilisé pour le logo lui-même. */
   highlighted?: boolean;
+  /** Impose une palette indépendamment du thème système (Anomalie 2, build 16) — voir `useTheme`. */
+  forcedScheme?: 'light' | 'dark';
 };
 
-/** Avatar circulaire : photo personnalisée, sinon avatar loup prédéfini, sinon l'initiale du nom affiché (repli historique, conservé). */
-export function AvatarImage({ avatarUrl, displayName, size = 44, wolfPreset, highlighted = false }: AvatarImageProps) {
-  const theme = useTheme();
+/**
+ * Avatar circulaire : photo personnalisée si `avatarUrl` est réellement
+ * valide, sinon avatar loup prédéfini, sinon l'initiale du nom affiché
+ * (repli final). Résolution centralisée dans `resolveAvatarDisplay` (Anomalie
+ * 1, build 16) : une avatarUrl vide/"null"/"undefined"/invalide ne bloque
+ * jamais l'affichage de `wolfPreset` — ce composant est le seul point de
+ * résolution de l'avatar dans toute l'app, aucun écran ne doit réimplémenter
+ * cette logique.
+ */
+export function AvatarImage({
+  avatarUrl,
+  displayName,
+  size = 44,
+  wolfPreset,
+  highlighted = false,
+  forcedScheme,
+}: AvatarImageProps) {
+  const theme = useTheme(forcedScheme);
   const dimensionStyle = { width: size, height: size, borderRadius: size / 2 };
   const ringStyle = highlighted ? { borderWidth: 2, borderColor: theme.accent } : undefined;
 
-  const wolfSource = avatarUrl ? null : resolveWolfAvatarSource(wolfPreset);
+  const display = resolveAvatarDisplay(avatarUrl, wolfPreset);
 
   let content;
-  if (avatarUrl) {
+  if (display.kind === 'photo') {
     content = (
       <Image
-        source={{ uri: avatarUrl }}
+        source={{ uri: display.uri }}
         style={dimensionStyle}
         contentFit="cover"
         accessibilityLabel={`Photo de profil de ${displayName}`}
       />
     );
-  } else if (wolfSource) {
+  } else if (display.kind === 'wolf') {
     content = (
       <Image
-        source={wolfSource}
+        source={display.source}
         style={dimensionStyle}
         contentFit="cover"
         accessibilityLabel={`Avatar loup de ${displayName}`}
@@ -52,8 +70,10 @@ export function AvatarImage({ avatarUrl, displayName, size = 44, wolfPreset, hig
     );
   } else {
     content = (
-      <ThemedView type="backgroundElement" style={[styles.placeholder, dimensionStyle]}>
-        <ThemedText type="smallBold">{displayName.charAt(0).toUpperCase()}</ThemedText>
+      <ThemedView type="backgroundElement" forcedScheme={forcedScheme} style={[styles.placeholder, dimensionStyle]}>
+        <ThemedText type="smallBold" forcedScheme={forcedScheme}>
+          {displayName.charAt(0).toUpperCase()}
+        </ThemedText>
       </ThemedView>
     );
   }

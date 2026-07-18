@@ -15,6 +15,7 @@ import { ImageViewerModal } from '@/components/image-viewer-modal';
 import { MessageBubble } from '@/components/message-bubble';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { isWolfAvatarId } from '@/constants/avatars';
 import { MaxContentWidth, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
 import { useMediaUpload } from '@/hooks/use-media-upload';
@@ -26,13 +27,23 @@ import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 import { isSameLocalDay, formatDateSeparator } from '@/utils/datetime';
 
 export default function ConversationScreen() {
-  const { id, otherDisplayName, otherAvatarUrl } = useLocalSearchParams<{
+  const { id, otherDisplayName, otherAvatarUrl, otherAvatarPreset } = useLocalSearchParams<{
     id: string;
     otherUsername?: string;
     otherDisplayName?: string;
     otherAvatarUrl?: string;
+    otherAvatarPreset?: string;
   }>();
-  const theme = useTheme();
+  // Les route params ne connaissent que des chaînes : une valeur absente ou
+  // corrompue retombe silencieusement sur `undefined` (AvatarImage bascule
+  // alors sur l'initiale), jamais une valeur inventée.
+  const otherWolfPreset = otherAvatarPreset && isWolfAvatarId(otherAvatarPreset) ? otherAvatarPreset : undefined;
+  // Palette sombre imposée indépendamment du thème système (Anomalie 2,
+  // build 16) : l'environnement de discussion reste toujours sombre, choix
+  // de direction visuelle délibéré, distinct du reste de l'app (qui continue
+  // de suivre le thème système). Ne touche ni Realtime, ni les messages, ni
+  // les uploads, ni Supabase.
+  const theme = useTheme('dark');
   const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
@@ -93,25 +104,31 @@ export default function ConversationScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView forcedScheme="dark" style={styles.container}>
       {/* edges sans 'bottom' : l'inset bas (barre de navigation Android en
           edge-to-edge) est géré explicitement sur la zone de rédaction
           ci-dessous, pas ici, pour éviter un double espacement quand le
           clavier est ouvert. */}
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ThemedView style={[styles.header, { borderBottomColor: theme.border }]}>
+        <ThemedView forcedScheme="dark" style={[styles.header, { borderBottomColor: theme.border }]}>
           <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
-            <ThemedText type="link" themeColor="textSecondary">
+            <ThemedText type="link" themeColor="textSecondary" forcedScheme="dark">
               Retour
             </ThemedText>
           </Pressable>
-          <ThemedView style={styles.headerIdentity}>
-            <AvatarImage avatarUrl={otherAvatarUrl || null} displayName={otherDisplayName ?? '?'} size={36} />
-            <ThemedText type="label" numberOfLines={1} style={styles.headerTitle}>
+          <ThemedView forcedScheme="dark" style={styles.headerIdentity}>
+            <AvatarImage
+              avatarUrl={otherAvatarUrl || null}
+              wolfPreset={otherWolfPreset}
+              displayName={otherDisplayName ?? '?'}
+              size={36}
+              forcedScheme="dark"
+            />
+            <ThemedText type="label" numberOfLines={1} forcedScheme="dark" style={styles.headerTitle}>
               {otherDisplayName ?? 'Discussion'}
             </ThemedText>
           </ThemedView>
-          <ThemedView style={styles.headerSpacer} />
+          <ThemedView forcedScheme="dark" style={styles.headerSpacer} />
         </ThemedView>
 
         {/* L'en-tête reste au-dessus, hors du KeyboardAvoidingView, donc
@@ -123,11 +140,11 @@ export default function ConversationScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}>
           {isLoading ? (
-            <AppLoadingState accessibilityLabel="Chargement des messages" />
+            <AppLoadingState accessibilityLabel="Chargement des messages" forcedScheme="dark" />
           ) : error ? (
-            <AppErrorState description={error} onRetry={retryInitialLoad} />
+            <AppErrorState description={error} onRetry={retryInitialLoad} forcedScheme="dark" />
           ) : messages.length === 0 ? (
-            <AppEmptyState title="Aucun message pour le moment" description="Écris le premier !" />
+            <AppEmptyState title="Aucun message pour le moment" description="Écris le premier !" forcedScheme="dark" />
           ) : (
             <FlatList
               style={styles.messageList}
@@ -164,7 +181,7 @@ export default function ConversationScreen() {
               onEndReachedThreshold={0.3}
               ListFooterComponent={
                 isLoadingMore ? (
-                  <ThemedView style={styles.loadingMore}>
+                  <ThemedView forcedScheme="dark" style={styles.loadingMore}>
                     <ActivityIndicator size="small" />
                   </ThemedView>
                 ) : null
@@ -177,12 +194,22 @@ export default function ConversationScreen() {
           )}
 
           {sendError && (
-            <ThemedText type="bodySmall" themeColor="danger" style={styles.errorPadding} accessibilityRole="alert">
+            <ThemedText
+              type="bodySmall"
+              themeColor="danger"
+              forcedScheme="dark"
+              style={styles.errorPadding}
+              accessibilityRole="alert">
               {sendError}
             </ThemedText>
           )}
           {mediaError && !pickedMedia && (
-            <ThemedText type="bodySmall" themeColor="danger" style={styles.errorPadding} accessibilityRole="alert">
+            <ThemedText
+              type="bodySmall"
+              themeColor="danger"
+              forcedScheme="dark"
+              style={styles.errorPadding}
+              accessibilityRole="alert">
               {mediaError}
             </ThemedText>
           )}
@@ -197,30 +224,39 @@ export default function ConversationScreen() {
               onSend={handleSendMedia}
             />
           )}
+          {/* Composeur « carte sombre » (Anomalie 2, build 16) : élevé sur le
+              fond noir profond de l'écran (surfaceHigh + bordure discrète),
+              bouton d'envoi circulaire vert forêt, boutons pièce jointe
+              sobres (variante ghost, sans encadré). marginBottom (plutôt
+              qu'un paddingBottom interne) espace la carte de la barre de
+              navigation Android (edge-to-edge) sans l'étirer. */}
           <ThemedView
+            forcedScheme="dark"
             style={[
               styles.inputRow,
-              { borderTopColor: theme.border },
-              // Espace la barre de navigation Android (edge-to-edge) quand
-              // le clavier est fermé ; jamais en position absolute.
-              { paddingBottom: Math.max(insets.bottom, Spacing.two) },
+              { borderColor: theme.border, backgroundColor: theme.surfaceHigh },
+              { marginBottom: Math.max(insets.bottom, Spacing.two) },
             ]}>
-            <ThemedView style={styles.mediaButtons}>
+            <ThemedView forcedScheme="dark" style={styles.mediaButtons}>
               <Button
                 label="Photo"
                 onPress={pickImage}
                 disabled={!!pickedMedia || isUploadingMedia}
-                variant="secondary"
+                variant="ghost"
                 size="small"
                 accessibilityLabel="Ajouter une photo"
+                forcedScheme="dark"
+                style={styles.mediaButton}
               />
               <Button
                 label="Vidéo"
                 onPress={pickVideo}
                 disabled={!!pickedMedia || isUploadingMedia}
-                variant="secondary"
+                variant="ghost"
                 size="small"
                 accessibilityLabel="Ajouter une vidéo"
+                forcedScheme="dark"
+                style={styles.mediaButton}
               />
             </ThemedView>
             <TextInput
@@ -234,15 +270,16 @@ export default function ConversationScreen() {
               returnKeyType="send"
               onSubmitEditing={handleSend}
               accessibilityLabel="Message"
-              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
+              style={[styles.input, { color: theme.text, backgroundColor: theme.surface }]}
             />
             <Button
-              label="Envoyer"
+              label="➤"
               onPress={handleSend}
               disabled={!draft.trim()}
               loading={isSending}
-              size="small"
               accessibilityLabel="Envoyer le message"
+              forcedScheme="dark"
+              style={styles.sendButton}
             />
           </ThemedView>
         </KeyboardAvoidingView>
@@ -308,22 +345,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    marginHorizontal: Spacing.three,
+    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   mediaButtons: {
     flexDirection: 'row',
     gap: Spacing.one,
   },
+  mediaButton: {
+    paddingHorizontal: Spacing.two,
+  },
   input: {
     flex: 1,
-    borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     fontSize: 16,
     maxHeight: 120,
     minHeight: TouchTarget.min,
+  },
+  sendButton: {
+    width: TouchTarget.comfortable,
+    height: TouchTarget.comfortable,
+    minHeight: TouchTarget.comfortable,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 0,
   },
 });

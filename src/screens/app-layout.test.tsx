@@ -32,6 +32,19 @@ jest.mock('expo-router', () => {
   };
 });
 
+// MyProfileProvider (Anomalie 1, build 16) importe toute la chaîne
+// use-my-profile -> services/profiles -> lib/supabase ->
+// secure-session-storage -> AsyncStorage natif, absente de cet environnement
+// de test volontairement minimal (seule la structure du Stack est vérifiée
+// ici, jamais l'état du profil) — même principe que le mock d'expo-router
+// ci-dessus : une enveloppe transparente suffit.
+jest.mock('@/contexts/my-profile-context', () => {
+  const ReactActual = jest.requireActual('react');
+  return {
+    MyProfileProvider: ({ children }: { children: React.ReactNode }) => ReactActual.createElement(ReactActual.Fragment, null, children),
+  };
+});
+
 describe('AppLayout (groupe (app))', () => {
   it('déclare index, search, profile, notifications et conversation/[id], tous dans le même groupe protégé', async () => {
     await render(<AppLayout />);

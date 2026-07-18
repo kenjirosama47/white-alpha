@@ -65,6 +65,8 @@ type ConversationForNotificationRow = {
   other_username: string;
   other_display_name: string;
   other_avatar_url: string | null;
+  /** Avatar loup prédéfini de l'autre participant — voir migration 20260718090000 (Anomalie 1, build 16). */
+  other_avatar_preset: string;
 };
 
 /**
@@ -73,14 +75,6 @@ type ConversationForNotificationRow = {
  * la notification elle-même). `null` signifie explicitement "reviens à
  * Conversations" : accès perdu, conversation supprimée, ou identifiant
  * invalide — jamais une erreur qui distinguerait ces cas entre eux.
- *
- * `get_conversation_for_notification` (Phase 6) n'a volontairement pas été
- * modifiée en Phase 7.5 (hors périmètre : logique de notifications). Le
- * repli sur `DEFAULT_WOLF_AVATAR_ID` ci-dessous est purement client — aucune
- * donnée réelle n'est perdue : si l'autre participant a une photo
- * personnelle (`avatarUrl`), elle reste prioritaire et s'affiche normalement ;
- * seul un avatar loup personnalisé ne serait pas reflété sur ce chemin précis
- * (ouverture depuis une notification), jusqu'à une future Phase notifications.
  */
 export async function getConversationForNotification(
   conversationId: string,
@@ -100,6 +94,6 @@ export async function getConversationForNotification(
     username: row.other_username,
     displayName: row.other_display_name,
     avatarUrl: row.other_avatar_url ? getAvatarPublicUrl(row.other_avatar_url) : null,
-    avatarPreset: DEFAULT_WOLF_AVATAR_ID,
+    avatarPreset: isWolfAvatarId(row.other_avatar_preset) ? row.other_avatar_preset : DEFAULT_WOLF_AVATAR_ID,
   };
 }

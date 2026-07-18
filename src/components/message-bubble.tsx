@@ -29,7 +29,10 @@ export function MessageBubble({
   onDelete,
   onRetryDelete,
 }: MessageBubbleProps) {
-  const theme = useTheme();
+  // Palette sombre imposée indépendamment du thème système (Anomalie 2,
+  // build 16) : l'environnement de discussion reste toujours sombre, un
+  // choix de direction visuelle délibéré — voir conversation/[id].tsx.
+  const theme = useTheme('dark');
   const hasText = message.content.trim().length > 0;
   const isVideoMessage = message.attachment?.mediaType === 'video';
   const [confirming, setConfirming] = useState(false);
@@ -90,7 +93,7 @@ export function MessageBubble({
                     accessibilityLabel="Options du message vidéo"
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.videoMenuButton, pressed && styles.pressed]}>
-                    <ThemedText type="label" style={styles.videoMenuIcon}>
+                    <ThemedText type="label" forcedScheme="dark" style={styles.videoMenuIcon}>
                       ⋮
                     </ThemedText>
                   </Pressable>
@@ -107,7 +110,7 @@ export function MessageBubble({
                           onPress={handleOpenDeleteFromVideoMenu}
                           hitSlop={8}
                           style={({ pressed }) => [styles.videoMenuItem, pressed && styles.pressed]}>
-                          <ThemedText type="bodySmall" themeColor="danger">
+                          <ThemedText type="bodySmall" themeColor="danger" forcedScheme="dark">
                             Supprimer
                           </ThemedText>
                         </Pressable>
@@ -119,13 +122,14 @@ export function MessageBubble({
             </View>
           )}
           {hasText && (
-            <ThemedText type="body" style={isOwnMessage ? { color: theme.onAccent } : undefined}>
+            <ThemedText type="body" forcedScheme="dark" style={isOwnMessage ? { color: theme.onAccent } : undefined}>
               {message.content}
             </ThemedText>
           )}
           <ThemedText
             type="caption"
             themeColor={isOwnMessage ? undefined : 'textSecondary'}
+            forcedScheme="dark"
             style={[styles.time, isOwnMessage && { color: theme.onAccent }]}>
             {formatTime(message.createdAt)}
           </ThemedText>
@@ -135,31 +139,31 @@ export function MessageBubble({
           <View style={styles.deleteRow}>
             {deletionState?.status === 'error' ? (
               <>
-                <ThemedText type="caption" themeColor="danger">
+                <ThemedText type="caption" themeColor="danger" forcedScheme="dark">
                   {deletionState.error}
                 </ThemedText>
                 <Pressable onPress={onRetryDelete} hitSlop={8} accessibilityRole="button" accessibilityLabel="Réessayer la suppression">
-                  <ThemedText type="caption" themeColor="accent">
+                  <ThemedText type="caption" themeColor="accent" forcedScheme="dark">
                     Réessayer
                   </ThemedText>
                 </Pressable>
               </>
             ) : isDeleting ? (
-              <ThemedText type="caption" themeColor="textSecondary">
+              <ThemedText type="caption" themeColor="textSecondary" forcedScheme="dark">
                 Suppression…
               </ThemedText>
             ) : confirming ? (
               <>
-                <ThemedText type="caption" themeColor="textSecondary">
+                <ThemedText type="caption" themeColor="textSecondary" forcedScheme="dark">
                   Supprimer ce message ?
                 </ThemedText>
                 <Pressable onPress={handleConfirm} hitSlop={8} accessibilityRole="button" accessibilityLabel="Confirmer la suppression">
-                  <ThemedText type="caption" themeColor="danger">
+                  <ThemedText type="caption" themeColor="danger" forcedScheme="dark">
                     Confirmer
                   </ThemedText>
                 </Pressable>
                 <Pressable onPress={() => setConfirming(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Annuler la suppression">
-                  <ThemedText type="caption" themeColor="textSecondary">
+                  <ThemedText type="caption" themeColor="textSecondary" forcedScheme="dark">
                     Annuler
                   </ThemedText>
                 </Pressable>
@@ -169,7 +173,7 @@ export function MessageBubble({
               // videoMenuAnchor) : le lien texte ici serait sous la même
               // zone potentiellement recouverte par le lecteur natif.
               <Pressable onPress={() => setConfirming(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer ce message">
-                <ThemedText type="caption" themeColor="textSecondary">
+                <ThemedText type="caption" themeColor="textSecondary" forcedScheme="dark">
                   Supprimer
                 </ThemedText>
               </Pressable>

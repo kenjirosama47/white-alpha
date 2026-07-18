@@ -9,13 +9,13 @@ import { ThemedView } from '@/components/themed-view';
 import { WolfAvatarTile } from '@/components/wolf-avatar-tile';
 import { WOLF_AVATAR_CATALOG, getWolfAvatarLabel } from '@/constants/avatars';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useMyProfileContext } from '@/contexts/my-profile-context';
 import { useAvatarPreset } from '@/hooks/use-avatar-preset';
-import { useMyProfile } from '@/hooks/use-my-profile';
 import { useTheme } from '@/hooks/use-theme';
 import type { MyProfile } from '@/services/profiles';
 
 export default function AvatarGalleryScreen() {
-  const { profile, isLoading, error, refresh, setProfile } = useMyProfile();
+  const { profile, isLoading, error, refresh, setProfile } = useMyProfileContext();
 
   return (
     <ThemedView style={styles.container}>

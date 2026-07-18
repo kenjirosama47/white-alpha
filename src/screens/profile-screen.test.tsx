@@ -19,8 +19,8 @@ jest.mock('@/contexts/auth-context', () => ({
 }));
 
 const mockUseMyProfile = jest.fn();
-jest.mock('@/hooks/use-my-profile', () => ({
-  useMyProfile: () => mockUseMyProfile(),
+jest.mock('@/contexts/my-profile-context', () => ({
+  useMyProfileContext: () => mockUseMyProfile(),
 }));
 
 const mockUseProfileEditor = jest.fn();
@@ -106,6 +106,18 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('Modifier le profil')).toBeTruthy();
     expect(screen.getByText('Se déconnecter')).toBeTruthy();
   });
+
+  it(
+    "affiche l'avatar loup choisi (avatarPreset) quand aucune photo personnelle n'est définie " +
+      '(Anomalie 1, build 16)',
+    async () => {
+      mockUseMyProfile.mockReturnValue(baseProfileState());
+
+      await render(<ProfileScreen />);
+
+      expect(screen.getByLabelText('Avatar loup de Kenjiro')).toBeTruthy();
+    },
+  );
 
   it('le bouton Retour ramène vers Conversations (router.back)', async () => {
     mockUseMyProfile.mockReturnValue(baseProfileState());

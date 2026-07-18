@@ -49,6 +49,7 @@ export function useNotificationResponseNavigation(): void {
               otherUsername: conversation.username,
               otherDisplayName: conversation.displayName,
               otherAvatarUrl: conversation.avatarUrl ?? '',
+              otherAvatarPreset: conversation.avatarPreset,
             },
           });
         })

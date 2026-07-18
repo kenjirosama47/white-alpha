@@ -6,7 +6,7 @@ import type { Message } from '@/types/chat';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
-  useLocalSearchParams: () => ({ id: 'conv-1', otherDisplayName: 'Bob' }),
+  useLocalSearchParams: () => ({ id: 'conv-1', otherDisplayName: 'Bob', otherAvatarPreset: 'wolf_grey' }),
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -124,7 +124,11 @@ describe('ConversationScreen — composer', () => {
   it("le bouton Envoyer reste désactivé et n'appelle pas send tant que le champ est vide", async () => {
     await render(<ConversationScreen />);
 
-    fireEvent.press(screen.getByText('Envoyer'));
+    // Le bouton d'envoi du composeur texte est circulaire (glyphe « ➤ »,
+    // Anomalie 2, build 16) : ciblé par son accessibilityLabel, jamais par
+    // un texte visible désormais réservé au bouton « Envoyer » de l'aperçu
+    // média (attachment-composer-preview.tsx, inchangé).
+    fireEvent.press(screen.getByLabelText('Envoyer le message'));
 
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -137,7 +141,7 @@ describe('ConversationScreen — composer', () => {
     fireEvent.changeText(input, 'Salut Bob !');
     await waitFor(() => expect(input.props.value).toBe('Salut Bob !'));
 
-    fireEvent.press(screen.getByText('Envoyer'));
+    fireEvent.press(screen.getByLabelText('Envoyer le message'));
 
     await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
     expect(mockSend).toHaveBeenCalledWith('Salut Bob !');
@@ -153,7 +157,7 @@ describe('ConversationScreen — composer', () => {
     fireEvent.changeText(input, 'Message qui va échouer');
     await waitFor(() => expect(input.props.value).toBe('Message qui va échouer'));
 
-    fireEvent.press(screen.getByText('Envoyer'));
+    fireEvent.press(screen.getByLabelText('Envoyer le message'));
 
     await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
     expect(input.props.value).toBe('Message qui va échouer');
@@ -215,7 +219,10 @@ describe('ConversationScreen — photo et vidéo', () => {
     await waitFor(() => expect(input.props.value).toBe('Texte en cours de rédaction'));
 
     expect(screen.getByText('Annuler')).toBeTruthy();
-    expect(screen.getAllByText('Envoyer').length).toBeGreaterThanOrEqual(1);
+    // Un seul bouton texte « Envoyer » désormais : celui de l'aperçu média
+    // (attachment-composer-preview.tsx, inchangé) — le bouton du composeur
+    // texte est circulaire (glyphe « ➤ », Anomalie 2, build 16).
+    expect(screen.getByText('Envoyer')).toBeTruthy();
 
     fireEvent.press(screen.getByText('Annuler'));
     expect(mockCancelMedia).toHaveBeenCalledTimes(1);
@@ -230,10 +237,7 @@ describe('ConversationScreen — photo et vidéo', () => {
     };
     await render(<ConversationScreen />);
 
-    // Deux boutons "Envoyer" existent (texte + média) : l'aperçu média est
-    // rendu avant la barre de composition dans l'arbre, donc en premier.
-    const sendButtons = screen.getAllByText('Envoyer');
-    fireEvent.press(sendButtons[0]);
+    fireEvent.press(screen.getByText('Envoyer'));
 
     await waitFor(() => expect(mockSendMedia).toHaveBeenCalledTimes(1));
   });
@@ -284,8 +288,7 @@ describe('ConversationScreen — photo et vidéo', () => {
     fireEvent.changeText(input, 'Message texte indépendant');
     await waitFor(() => expect(input.props.value).toBe('Message texte indépendant'));
 
-    const sendButtons = screen.getAllByText('Envoyer');
-    fireEvent.press(sendButtons[sendButtons.length - 1]);
+    fireEvent.press(screen.getByLabelText('Envoyer le message'));
 
     await waitFor(() => expect(mockSend).toHaveBeenCalledWith('Message texte indépendant'));
   });
@@ -357,4 +360,16 @@ describe('ConversationScreen — visionneuse image et restauration du focus (Pha
     mockReduceMotion = false;
     durationSpy.mockRestore();
   });
+});
+
+describe("ConversationScreen — en-tête (Anomalie 1/2, build 16)", () => {
+  it(
+    "affiche l'avatar loup de l'interlocuteur dans l'en-tête, à partir du route param otherAvatarPreset " +
+      '(absent avant ce correctif)',
+    async () => {
+      await render(<ConversationScreen />);
+
+      expect(screen.getByLabelText('Avatar loup de Bob')).toBeTruthy();
+    },
+  );
 });

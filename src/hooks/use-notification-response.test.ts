@@ -61,6 +61,7 @@ describe('useNotificationResponseNavigation', () => {
       username: 'bob',
       displayName: 'Bob',
       avatarUrl: null,
+      avatarPreset: 'wolf_alpha',
     });
     await renderHook(() => useNotificationResponseNavigation());
 
@@ -71,7 +72,13 @@ describe('useNotificationResponseNavigation', () => {
     expect(getConversationForNotification).toHaveBeenCalledWith('c1');
     expect(router.push).toHaveBeenCalledWith({
       pathname: '/conversation/[id]',
-      params: { id: 'c1', otherUsername: 'bob', otherDisplayName: 'Bob', otherAvatarUrl: '' },
+      params: {
+        id: 'c1',
+        otherUsername: 'bob',
+        otherDisplayName: 'Bob',
+        otherAvatarUrl: '',
+        otherAvatarPreset: 'wolf_alpha',
+      },
     });
   });
 

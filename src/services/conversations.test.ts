@@ -118,7 +118,7 @@ describe('getConversationForNotification', () => {
     mockRpc.mockReset();
   });
 
-  it("revalide l'appartenance via la RPC dédiée et mappe la ligne retournée", async () => {
+  it("revalide l'appartenance via la RPC dédiée et mappe la ligne retournée, avatar_preset inclus", async () => {
     mockRpc.mockResolvedValue({
       data: [
         {
@@ -127,6 +127,7 @@ describe('getConversationForNotification', () => {
           other_username: 'bob',
           other_display_name: 'Bob',
           other_avatar_url: null,
+          other_avatar_preset: 'wolf_alpha',
         },
       ],
       error: null,
@@ -135,18 +136,63 @@ describe('getConversationForNotification', () => {
     const result = await getConversationForNotification('c1');
 
     expect(mockRpc).toHaveBeenCalledWith('get_conversation_for_notification', { p_conversation_id: 'c1' });
-    // avatarPreset : repli constant (wolf_white_calm) — get_conversation_for_notification
-    // (Phase 6) n'a volontairement pas été modifiée en Phase 7.5, voir commentaire
-    // dans services/conversations.ts. Si l'autre participant a une vraie photo
-    // (avatarUrl), elle reste de toute façon prioritaire à l'affichage.
+    // Depuis la migration 20260718090000 (Anomalie 1, build 16) :
+    // get_conversation_for_notification renvoie le véritable avatar_preset de
+    // l'autre participant, jamais un repli codé en dur.
     expect(result).toEqual({
       conversationId: 'c1',
       id: 'u2',
       username: 'bob',
       displayName: 'Bob',
       avatarUrl: null,
-      avatarPreset: 'wolf_white_calm',
+      avatarPreset: 'wolf_alpha',
     });
+  });
+
+  it(
+    "n'expose aucun champ sensible : la migration 20260718090000 n'ajoute que other_avatar_preset, " +
+      'jamais email/role/owner/MFA/token (validation section 2/4)',
+    async () => {
+      mockRpc.mockResolvedValue({
+        data: [
+          {
+            conversation_id: 'c1',
+            other_user_id: 'u2',
+            other_username: 'bob',
+            other_display_name: 'Bob',
+            other_avatar_url: null,
+            other_avatar_preset: 'wolf_alpha',
+          },
+        ],
+        error: null,
+      });
+
+      const result = await getConversationForNotification('c1');
+
+      expect(Object.keys(result ?? {}).sort()).toEqual(
+        ['avatarPreset', 'avatarUrl', 'conversationId', 'displayName', 'id', 'username'].sort(),
+      );
+    },
+  );
+
+  it('retombe sur DEFAULT_WOLF_AVATAR_ID si other_avatar_preset est inattendu (défense en profondeur)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        {
+          conversation_id: 'c1',
+          other_user_id: 'u2',
+          other_username: 'bob',
+          other_display_name: 'Bob',
+          other_avatar_url: null,
+          other_avatar_preset: 'valeur_inconnue',
+        },
+      ],
+      error: null,
+    });
+
+    const result = await getConversationForNotification('c1');
+
+    expect(result?.avatarPreset).toBe('wolf_white_calm');
   });
 
   it("retourne null quand l'appelant n'est plus participant (aucune ligne renvoyée), jamais une erreur distinctive", async () => {

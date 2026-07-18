@@ -8,8 +8,8 @@ jest.mock('expo-router', () => ({
 }));
 
 const mockUseMyProfile = jest.fn();
-jest.mock('@/hooks/use-my-profile', () => ({
-  useMyProfile: () => mockUseMyProfile(),
+jest.mock('@/contexts/my-profile-context', () => ({
+  useMyProfileContext: () => mockUseMyProfile(),
 }));
 
 const mockUseConversations = jest.fn();

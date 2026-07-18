@@ -16,6 +16,8 @@ type ButtonProps = {
   loading?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
+  /** Impose une palette indépendamment du thème système (Anomalie 2, build 16) — voir `useTheme`. */
+  forcedScheme?: 'light' | 'dark';
 };
 
 /**
@@ -34,8 +36,9 @@ export function Button({
   loading = false,
   accessibilityLabel,
   style,
+  forcedScheme,
 }: ButtonProps) {
-  const theme = useTheme();
+  const theme = useTheme(forcedScheme);
   const isDisabled = disabled || loading;
 
   const variantStyle: StyleProp<ViewStyle> =
@@ -68,7 +71,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator size="small" color={labelColor} />
       ) : (
-        <ThemedText type="label" style={{ color: labelColor }}>
+        <ThemedText type="label" forcedScheme={forcedScheme} style={{ color: labelColor }}>
           {label}
         </ThemedText>
       )}

@@ -7,7 +7,7 @@
 -- Ne jamais exécuter contre le projet distant.
 
 begin;
-select plan(30);
+select plan(32);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures : 2 utilisateurs de test (A, B) + une conversation + un message.
@@ -253,6 +253,37 @@ select is(
   (select other_user_id from public.get_conversation_for_notification((select id from t_conv))),
   '82000000-0000-0000-0000-000000000082'::uuid,
   'A, participant, peut rouvrir sa conversation depuis une notification'
+);
+
+-- ---------------------------------------------------------------------------
+-- Correctif Anomalie 1 (build 16, migration 20260718090000) :
+-- get_conversation_for_notification doit refléter l'avatar_preset réel de
+-- l'autre participant, jamais un repli client codé en dur.
+-- ---------------------------------------------------------------------------
+select is(
+  (select other_avatar_preset from public.get_conversation_for_notification((select id from t_conv))),
+  'wolf_white_calm',
+  'get_conversation_for_notification renvoie l''avatar_preset par défaut de B avant toute modification'
+);
+
+-- `authenticated` n'a jamais de GRANT UPDATE direct sur profiles.avatar_preset
+-- (seule update_my_avatar_preset, SECURITY DEFINER, peut l'écrire — voir
+-- migration 20260717210000) : reset role le temps de cette mise à jour de
+-- fixture, exactement comme les insert into auth.users plus haut dans ce
+-- fichier, jamais une élévation de privilège du test lui-même.
+reset role;
+reset "request.jwt.claim.sub";
+reset "request.jwt.claims";
+update public.profiles set avatar_preset = 'wolf_alpha' where id = '82000000-0000-0000-0000-000000000082';
+
+set local role authenticated;
+set local "request.jwt.claim.sub" = '81000000-0000-0000-0000-000000000081';
+set local "request.jwt.claims" = '{"sub":"81000000-0000-0000-0000-000000000081","role":"authenticated"}';
+
+select is(
+  (select other_avatar_preset from public.get_conversation_for_notification((select id from t_conv))),
+  'wolf_alpha',
+  'get_conversation_for_notification reflète l''avatar_preset réellement choisi par B, jamais un repli codé en dur (Anomalie 1, build 16)'
 );
 
 select is(

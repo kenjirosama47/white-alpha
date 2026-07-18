@@ -29,7 +29,8 @@ export function AttachmentComposerPreview({
   onCancelUpload,
   onSend,
 }: AttachmentComposerPreviewProps) {
-  const theme = useTheme();
+  // Palette sombre imposée (Anomalie 2, build 16) — voir message-bubble.tsx.
+  const theme = useTheme('dark');
 
   return (
     <View style={[styles.container, { backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}>
@@ -38,33 +39,39 @@ export function AttachmentComposerPreview({
           <Image source={{ uri: media.data.uri }} style={styles.thumbnail} contentFit="cover" />
         ) : (
           <View style={[styles.videoThumbnail, { backgroundColor: theme.surface }]}>
-            <ThemedText type="label" style={styles.videoIcon}>
+            <ThemedText type="label" forcedScheme="dark" style={styles.videoIcon}>
               ▶
             </ThemedText>
           </View>
         )}
         <View style={styles.actions}>
           {media.kind === 'video' && (
-            <ThemedText type="caption" themeColor="textSecondary">
+            <ThemedText type="caption" themeColor="textSecondary" forcedScheme="dark">
               {formatDuration(media.data.durationMs ?? 0)}
               {media.data.sizeBytes != null ? ` · ${formatFileSize(media.data.sizeBytes)}` : ''}
             </ThemedText>
           )}
           {error && (
-            <ThemedText type="caption" themeColor="danger">
+            <ThemedText type="caption" themeColor="danger" forcedScheme="dark">
               {error}
             </ThemedText>
           )}
           <View style={styles.buttonsRow}>
-            <Button label="Annuler" onPress={onCancel} disabled={isUploading} variant="secondary" size="small" />
+            <Button label="Annuler" onPress={onCancel} disabled={isUploading} variant="secondary" size="small" forcedScheme="dark" />
             {/* Un message d'erreur affiché signale une tentative précédente
                 échouée : ce même bouton relance l'envoi (reprise pour une
                 vidéo, nouveau chemin Storage pour une photo), sans jamais
                 redemander le fichier. */}
-            <Button label={error ? 'Réessayer' : 'Envoyer'} onPress={onSend} loading={isUploading} size="small" />
+            <Button
+              label={error ? 'Réessayer' : 'Envoyer'}
+              onPress={onSend}
+              loading={isUploading}
+              size="small"
+              forcedScheme="dark"
+            />
             {isUploading && media.kind === 'video' && (
               <Pressable onPress={onCancelUpload} hitSlop={8} style={({ pressed }) => [styles.cancelUpload, pressed && styles.pressed]}>
-                <ThemedText type="label" themeColor="danger">
+                <ThemedText type="label" themeColor="danger" forcedScheme="dark">
                   Annuler l’envoi
                 </ThemedText>
               </Pressable>

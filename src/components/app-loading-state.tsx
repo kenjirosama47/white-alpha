@@ -11,23 +11,26 @@ type AppLoadingStateProps = {
   /** `true` pour un indicateur inline (ex. pagination) plutôt que plein écran. */
   compact?: boolean;
   accessibilityLabel?: string;
+  /** Impose une palette indépendamment du thème système (Anomalie 2, build 16) — voir `useTheme`. */
+  forcedScheme?: 'light' | 'dark';
 };
 
 /** État de chargement générique : jamais un écran blanc, annoncé aux lecteurs d'écran. */
-export function AppLoadingState({ title, description, compact = false, accessibilityLabel }: AppLoadingStateProps) {
+export function AppLoadingState({ title, description, compact = false, accessibilityLabel, forcedScheme }: AppLoadingStateProps) {
   return (
     <ThemedView
+      forcedScheme={forcedScheme}
       style={[styles.container, compact ? styles.compact : styles.fullScreen]}
       accessibilityRole="progressbar"
       accessibilityLabel={accessibilityLabel ?? title ?? 'Chargement en cours'}>
       <ActivityIndicator size={compact ? 'small' : 'large'} />
       {title && (
-        <ThemedText type="smallBold" style={styles.centeredText}>
+        <ThemedText type="smallBold" forcedScheme={forcedScheme} style={styles.centeredText}>
           {title}
         </ThemedText>
       )}
       {description && (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+        <ThemedText type="small" themeColor="textSecondary" forcedScheme={forcedScheme} style={styles.centeredText}>
           {description}
         </ThemedText>
       )}

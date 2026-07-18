@@ -18,6 +18,16 @@ describe('ConversationListItem', () => {
     expect(screen.getByText('Salut !')).toBeTruthy();
   });
 
+  it(
+    "affiche l'avatar loup de l'interlocuteur (avatarPreset) quand il n'a pas de photo personnelle " +
+      '(Anomalie 1, build 16 — la liste des conversations omettait wolfPreset)',
+    async () => {
+      await render(<ConversationListItem conversation={conversation} onPress={jest.fn()} />);
+
+      expect(screen.getByLabelText('Avatar loup de Bob')).toBeTruthy();
+    },
+  );
+
   it("affiche un message de repli quand aucun message n'existe encore", async () => {
     await render(
       <ConversationListItem

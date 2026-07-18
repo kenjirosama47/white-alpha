@@ -1,7 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { MessageBubble } from '@/components/message-bubble';
+import { Colors } from '@/constants/theme';
 import type { Message } from '@/types/chat';
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return ([style] as unknown[])
+    .flat(Infinity)
+    .filter(Boolean)
+    .reduce((acc, s) => ({ ...(acc as object), ...(s as object) }), {}) as Record<string, unknown>;
+}
 
 jest.mock('@/components/message-image', () => ({
   MessageImage: () => null,
@@ -206,5 +214,27 @@ describe('MessageBubble — messages texte et photo (non régression)', () => {
     );
 
     expect(screen.queryByText('Supprimer')).toBeNull();
+  });
+});
+
+describe('MessageBubble — Design System sombre imposé (Anomalie 2, build 16)', () => {
+  it(
+    "utilise la bulle vert forêt sombre (Colors.dark.accent) pour un message envoyé, " +
+      "même si le thème système (par défaut clair dans cet environnement de test) diffère",
+    async () => {
+      await render(<MessageBubble message={textMessage} isOwnMessage onDelete={jest.fn()} onRetryDelete={jest.fn()} />);
+
+      const bubble = screen.getByText('Salut').parent;
+      expect(flattenStyle(bubble?.props.style).backgroundColor).toBe(Colors.dark.accent);
+    },
+  );
+
+  it('utilise la bulle gris pierre sombre (Colors.dark.surfaceHigh) pour un message reçu', async () => {
+    await render(
+      <MessageBubble message={textMessage} isOwnMessage={false} onDelete={jest.fn()} onRetryDelete={jest.fn()} />,
+    );
+
+    const bubble = screen.getByText('Salut').parent;
+    expect(flattenStyle(bubble?.props.style).backgroundColor).toBe(Colors.dark.surfaceHigh);
   });
 });

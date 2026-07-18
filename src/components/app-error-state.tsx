@@ -14,6 +14,8 @@ type AppErrorStateProps = {
   retryLabel?: string;
   compact?: boolean;
   accessibilityLabel?: string;
+  /** Impose une palette indépendamment du thème système (Anomalie 2, build 16) — voir `useTheme`. */
+  forcedScheme?: 'light' | 'dark';
 };
 
 /** État d'erreur récupérable générique, avec bouton « Réessayer » optionnel. */
@@ -24,19 +26,21 @@ export function AppErrorState({
   retryLabel = 'Réessayer',
   compact = false,
   accessibilityLabel,
+  forcedScheme,
 }: AppErrorStateProps) {
   return (
     <ThemedView
+      forcedScheme={forcedScheme}
       style={[styles.container, compact ? styles.compact : styles.fullScreen]}
       accessibilityRole="alert"
       accessibilityLabel={accessibilityLabel ?? description}>
-      <ThemedText type="smallBold" style={styles.centeredText}>
+      <ThemedText type="smallBold" forcedScheme={forcedScheme} style={styles.centeredText}>
         {title}
       </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+      <ThemedText type="small" themeColor="textSecondary" forcedScheme={forcedScheme} style={styles.centeredText}>
         {description}
       </ThemedText>
-      {onRetry && <RetryButton onPress={onRetry} label={retryLabel} />}
+      {onRetry && <RetryButton onPress={onRetry} label={retryLabel} forcedScheme={forcedScheme} />}
     </ThemedView>
   );
 }

@@ -19,7 +19,8 @@ const FALLBACK_ASPECT_RATIO = 4 / 3;
 
 /** Image d'une pièce jointe dans une bulle de message : URL signée, chargement, erreur avec nouvelle tentative. */
 export function MessageImage({ storagePath, width, height, onPress }: MessageImageProps) {
-  const theme = useTheme();
+  // Palette sombre imposée (Anomalie 2, build 16) — voir message-bubble.tsx.
+  const theme = useTheme('dark');
   const { url, isLoading, error, refresh } = useSignedAttachmentUrl(storagePath);
   const [loadFailed, setLoadFailed] = useState(false);
   const pressableRef = useRef<View>(null);
@@ -37,7 +38,7 @@ export function MessageImage({ storagePath, width, height, onPress }: MessageIma
         style={[styles.placeholder, { aspectRatio, backgroundColor: theme.surfaceHigh, borderColor: theme.border }]}
         accessibilityRole="button"
         accessibilityLabel="Image indisponible. Toucher pour réessayer.">
-        <ThemedText type="small" themeColor="textSecondary" style={styles.centeredText}>
+        <ThemedText type="small" themeColor="textSecondary" forcedScheme="dark" style={styles.centeredText}>
           Image indisponible. Toucher pour réessayer.
         </ThemedText>
       </Pressable>

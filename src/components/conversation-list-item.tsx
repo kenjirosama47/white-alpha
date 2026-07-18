@@ -22,7 +22,12 @@ export function ConversationListItem({ conversation, onPress }: ConversationList
       accessibilityRole="button"
       accessibilityLabel={`Ouvrir la conversation avec ${otherParticipant.displayName}`}
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}>
-      <AvatarImage avatarUrl={otherParticipant.avatarUrl} displayName={otherParticipant.displayName} size={TouchTarget.comfortable} />
+      <AvatarImage
+        avatarUrl={otherParticipant.avatarUrl}
+        wolfPreset={otherParticipant.avatarPreset}
+        displayName={otherParticipant.displayName}
+        size={TouchTarget.comfortable}
+      />
 
       <ThemedView style={styles.content}>
         <ThemedText type="label" numberOfLines={1}>

@@ -21,7 +21,12 @@ export function ProfileSearchResult({ profile, onPress, disabled }: ProfileSearc
       accessibilityLabel={`Ouvrir une conversation avec ${profile.displayName}`}
       accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [styles.container, (pressed || disabled) && styles.pressed]}>
-      <AvatarImage avatarUrl={profile.avatarUrl} displayName={profile.displayName} size={TouchTarget.comfortable} />
+      <AvatarImage
+        avatarUrl={profile.avatarUrl}
+        wolfPreset={profile.avatarPreset}
+        displayName={profile.displayName}
+        size={TouchTarget.comfortable}
+      />
 
       <ThemedView style={styles.content}>
         <ThemedText type="label" numberOfLines={1}>

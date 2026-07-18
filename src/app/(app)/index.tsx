@@ -13,15 +13,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EMPTY_CONVERSATIONS_COPY } from '@/constants/copy';
 import { MaxContentWidth, Spacing, TouchTarget } from '@/constants/theme';
+import { useMyProfileContext } from '@/contexts/my-profile-context';
 import { useConversations } from '@/hooks/use-conversations';
-import { useMyProfile } from '@/hooks/use-my-profile';
 import { useTheme } from '@/hooks/use-theme';
 import type { ConversationSummary } from '@/types/chat';
 
 export default function ConversationsScreen() {
   const theme = useTheme();
   const { conversations, isLoading, isRefreshing, error, refresh } = useConversations();
-  const { profile: myProfile } = useMyProfile();
+  const { profile: myProfile } = useMyProfileContext();
 
   function openConversation(conversation: ConversationSummary) {
     router.push({
@@ -31,6 +31,7 @@ export default function ConversationsScreen() {
         otherUsername: conversation.otherParticipant.username,
         otherDisplayName: conversation.otherParticipant.displayName,
         otherAvatarUrl: conversation.otherParticipant.avatarUrl ?? '',
+        otherAvatarPreset: conversation.otherParticipant.avatarPreset,
       },
     });
   }
@@ -41,7 +42,12 @@ export default function ConversationsScreen() {
         <ThemedView style={styles.header}>
           <ThemedText type="title">Conversations</ThemedText>
           <Pressable onPress={() => router.push('/profile')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Ouvrir mon profil">
-            <AvatarImage avatarUrl={myProfile?.avatarUrl ?? null} displayName={myProfile?.displayName ?? '?'} size={TouchTarget.comfortable} />
+            <AvatarImage
+              avatarUrl={myProfile?.avatarUrl ?? null}
+              wolfPreset={myProfile?.avatarPreset}
+              displayName={myProfile?.displayName ?? '?'}
+              size={TouchTarget.comfortable}
+            />
           </Pressable>
         </ThemedView>
 
