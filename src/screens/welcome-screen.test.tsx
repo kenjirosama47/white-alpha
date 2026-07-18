@@ -62,6 +62,33 @@ describe('WelcomeScreen — textes officiels White Alpha (Phase 7.3)', () => {
     expect(screen.queryByText(/claude/i)).toBeNull();
     expect(screen.queryByText(/Discussion Privée/i)).toBeNull();
   });
+
+  // Garde-fou anti-régression (build 16) : le sous-titre s'affichait tronqué
+  // en Release Android — « La meute privée. Vos échanges restent entre »,
+  // sans « vous. » — alors que le contenu complet était déjà présent ici
+  // (voir tests ci-dessus). Cause identifiée par instrumentation directe sur
+  // APK Release réel (onLayout + logcat) : Yoga mesure correctement la
+  // largeur du sous-titre mais sous-évalue sa hauteur à une seule ligne
+  // (24dp) au lieu des deux nécessaires — bug invisible en Jest, qui ne fait
+  // aucune vraie mesure de layout. `minHeight: 48` (2 × lineHeight) force
+  // Yoga à réserver l'espace vertical nécessaire, seule variable dont
+  // dépend le résultat sur APK réel (testé isolément : ScrollView,
+  // KeyboardAvoidingView, numberOfLines, ellipsizeMode, flexShrink,
+  // includeFontPadding et suppression de l'animation d'entrée n'ont, eux,
+  // aucun effet sur ce rendu précis). Ce test ne peut pas reproduire le bug
+  // lui-même (aucune vraie mesure Yoga en Jest) : il garantit seulement que
+  // le correctif reste en place dans le code.
+  it("le sous-titre réserve un minHeight de deux lignes (garde-fou anti-régression du texte tronqué, build 16)", async () => {
+    await render(<WelcomeScreen />);
+
+    const subtitle = screen.getByText('La meute privée. Vos échanges restent entre vous.');
+    const flat = ([subtitle.props.style] as unknown[])
+      .flat(Infinity)
+      .filter(Boolean)
+      .reduce((acc, s) => ({ ...(acc as object), ...(s as object) }), {}) as Record<string, unknown>;
+
+    expect(flat.minHeight).toBe(48);
+  });
 });
 
 describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {

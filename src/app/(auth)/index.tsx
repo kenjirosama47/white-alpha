@@ -26,7 +26,7 @@ export default function WelcomeScreen() {
           <ThemedView style={styles.heroSection}>
             <Image
               source={brandingIllustration}
-              style={styles.illustration}
+              style={[styles.illustration, styles.illustrationCentered]}
               accessibilityIgnoresInvertColors
               accessibilityLabel="Loup blanc White Alpha"
             />
@@ -55,7 +55,7 @@ export default function WelcomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Se connecter"
               style={[styles.buttonPrimary, { backgroundColor: theme.accent }, primaryPressed && styles.pressed]}>
-              <ThemedText type="label" style={{ color: theme.onAccent }}>
+              <ThemedText type="label" style={[styles.buttonLabel, { color: theme.onAccent }]}>
                 Se connecter
               </ThemedText>
             </Pressable>
@@ -66,7 +66,9 @@ export default function WelcomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Créer un compte"
               style={[styles.buttonSecondary, { borderColor: theme.border }, secondaryPressed && styles.pressed]}>
-              <ThemedText type="label">Créer un compte</ThemedText>
+              <ThemedText type="label" style={styles.buttonLabel}>
+                Créer un compte
+              </ThemedText>
             </Pressable>
           </ThemedView>
         </Animated.View>
@@ -80,8 +82,6 @@ const ILLUSTRATION_SIZE = 152;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
   safeArea: {
     flex: 1,
@@ -93,12 +93,17 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   content: {
-    alignItems: 'center',
+    // `alignItems: 'stretch'` (au lieu de 'center') : sur un parent flex
+    // 'center', un enfant <Text> devient shrink-to-fit sur l'axe croisé —
+    // nécessaire pour que le texte des boutons (Se connecter/Créer un
+    // compte) ne soit pas mesuré avec une largeur ambiguë (bug réel constaté
+    // et corrigé, build 16 : « Se »/« Créer un » au lieu du texte complet).
+    alignItems: 'stretch',
     gap: Spacing.six,
     width: '100%',
   },
   heroSection: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: Spacing.three,
   },
   illustration: {
@@ -106,11 +111,32 @@ const styles = StyleSheet.create({
     height: ILLUSTRATION_SIZE,
     borderRadius: ILLUSTRATION_SIZE / 2,
   },
+  illustrationCentered: {
+    alignSelf: 'center',
+  },
   title: {
     textAlign: 'center',
+    alignSelf: 'stretch',
   },
+  // `minHeight: 48` (2 × lineHeight de 24) : cause racine distincte,
+  // identifiée par instrumentation directe (onLayout + console.log lus via
+  // logcat sur APK Release réel, build 16) — Yoga mesure correctement la
+  // largeur du sous-titre (stretch, ~363dp, identique à heroSection) mais
+  // sous-évalue sa hauteur à une seule ligne (24dp) alors que le texte a
+  // réellement besoin de 2 lignes à cette largeur ; le rendu natif Android
+  // peint alors le texte jusqu'à épuisement de l'espace alloué, sans
+  // ellipse (aucun numberOfLines n'est fixé). `numberOfLines`,
+  // `ellipsizeMode`, `flexShrink`, `alignSelf`, `width: '100%'`,
+  // `includeFontPadding`, `allowFontScaling`/`maxFontSizeMultiplier`,
+  // ScrollView/KeyboardAvoidingView et la suppression de l'animation
+  // d'entrée ont tous été testés isolément sur APK Release réel sans effet
+  // sur ce texte précis : aucun n'influence la mesure de hauteur erronée.
+  // Réservation explicite de l'espace vertical nécessaire, seule variable
+  // dont dépend le résultat.
   subtitle: {
     textAlign: 'center',
+    alignSelf: 'stretch',
+    minHeight: 48,
   },
   actions: {
     alignSelf: 'stretch',
@@ -133,5 +159,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  buttonLabel: {
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
 });
