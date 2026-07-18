@@ -20,32 +20,22 @@ const mockUseReducedMotion = useReducedMotion as jest.Mock;
 // l'explication complète : Expo Router embarquerait sinon ce test dans le
 // bundle Android de production via require.context).
 //
-// Cause confirmée (test manuel réel sur émulateur Android API 36 + lecture
-// du code source d'expo-router) : <Link asChild> délègue la fusion des
-// props enfant/parent à @radix-ui/react-slot (voir
-// node_modules/expo-router/build/ui/Slot.js), qui fusionne `style` par
-// spread d'objet (`{...style}`) et n'accepte qu'un objet déjà aplati.
-// - style={({pressed}) => [...]} (fonction) : une fonction n'a aucune
-//   propriété propre énumérable, `{...fn}` produit un objet vide — tout le
-//   style disparaît silencieusement en production (constaté : fond bleu et
-//   bordure jamais peints, texte blanc invisible sur fond blanc ; layout
-//   correct car dérivé du flex du parent et du texte, pas du style disparu).
-// - style={[a, b]} (tableau, même hors fonction) : Slot le détecte
-//   explicitement et lève une erreur en dev ("You are passing an array of
-//   styles to a child of <Slot>. Consider flattening the styles with
-//   StyleSheet.flatten...") — confirmé en reproduisant l'erreur réelle.
-// Corrigé en appelant StyleSheet.flatten([...]) directement (jamais dans un
-// callback, jamais un tableau brut) pour un enfant direct de <Link asChild>,
-// l'état pressed étant géré via useState + onPressIn/onPressOut. Toujours
-// vrai après la refonte Phase 7.3 (garde-fou reconduit ci-dessous avec les
-// nouvelles couleurs du Design System).
-jest.mock('expo-router', () => {
-  const ReactActual = jest.requireActual('react');
-  return {
-    Link: ({ asChild, children }: { asChild?: boolean; children: React.ReactNode }) =>
-      asChild ? children : ReactActual.createElement(ReactActual.Fragment, null, children),
-  };
-});
+// Historique (Phase 7.3 puis build 16, design White Alpha) : ces deux
+// boutons utilisaient <Link asChild>, qui délègue la fusion des props
+// enfant/parent à @radix-ui/react-slot (expo-router ui/Slot.js). Un premier
+// bug (style perdu si fonction/tableau non aplati) avait été corrigé en
+// Phase 7.3. Un second bug, plus grave, n'a été détecté qu'au test manuel
+// réel du build 16 (texte des boutons tronqué à l'affichage — « Se » au lieu
+// de « Se connecter », etc. — alors que le contenu accessible restait
+// correct) : Jest ne fait aucune vraie mesure de layout (Yoga), ce bug de
+// rendu Fabric/Slot était donc invisible en test. Corrigé en abandonnant
+// <Link asChild> au profit d'un Pressable simple + `router.push(...)`, le
+// même mécanisme que tous les autres écrans de navigation de l'app (voir
+// profile.tsx, security.tsx) — plus aucune dépendance à Slot.
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+}));
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   const flat = ([style] as unknown[]).flat(Infinity).filter(Boolean) as Record<string, unknown>[];
@@ -75,22 +65,24 @@ describe('WelcomeScreen — textes officiels White Alpha (Phase 7.3)', () => {
 });
 
 describe('WelcomeScreen — boutons Se connecter / Créer un compte', () => {
-  it('le style du bouton principal est un objet déjà aplati, jamais une fonction ni un tableau (garde-fou anti-régression Link asChild + Slot)', async () => {
-    await render(<WelcomeScreen />);
-
-    const label = screen.getByText('Se connecter');
-    const style = label.parent?.props.style;
-    expect(typeof style).not.toBe('function');
-    expect(Array.isArray(style)).toBe(false);
+  beforeEach(() => {
+    mockRouterPush.mockReset();
   });
 
-  it('le style du bouton secondaire est un objet déjà aplati, jamais une fonction ni un tableau (garde-fou anti-régression Link asChild + Slot)', async () => {
+  it('un tap sur « Se connecter » navigue vers /login (pas de <Link asChild>/Slot)', async () => {
     await render(<WelcomeScreen />);
 
-    const label = screen.getByText('Créer un compte');
-    const style = label.parent?.props.style;
-    expect(typeof style).not.toBe('function');
-    expect(Array.isArray(style)).toBe(false);
+    fireEvent.press(screen.getByText('Se connecter'));
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('un tap sur « Créer un compte » navigue vers /register (pas de <Link asChild>/Slot)', async () => {
+    await render(<WelcomeScreen />);
+
+    fireEvent.press(screen.getByText('Créer un compte'));
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/register');
   });
 
   it('le bouton « Se connecter » utilise le vert forêt (accent) au repos', async () => {

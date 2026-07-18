@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -39,42 +39,35 @@ export default function WelcomeScreen() {
           </ThemedView>
 
           <ThemedView style={styles.actions}>
-            {/* <Link asChild> délègue la fusion des props à @radix-ui/react-slot
-                (expo-router ui/Slot.js), qui fusionne `style` par spread
-                d'objet et rejette explicitement (throw en dev, échec
-                silencieux en prod — fond/texte disparaissent) tout style qui
-                n'est pas déjà un objet aplati : jamais de fonction ni de
-                tableau ici (voir welcome-screen.test.tsx, garde-fou dédié).
-                D'où StyleSheet.flatten(...) appelé directement et l'état
-                pressed géré manuellement — le composant `Button` partagé
-                (Phase 7.1) n'est volontairement pas utilisé sur ces deux
-                boutons précis, son style interne étant une fonction. */}
-            <Link href="/login" asChild>
-              <Pressable
-                onPressIn={() => setPrimaryPressed(true)}
-                onPressOut={() => setPrimaryPressed(false)}
-                style={StyleSheet.flatten([
-                  styles.buttonPrimary,
-                  { backgroundColor: theme.accent },
-                  primaryPressed && styles.pressed,
-                ])}>
-                <ThemedText type="label" style={{ color: theme.onAccent }}>
-                  Se connecter
-                </ThemedText>
-              </Pressable>
-            </Link>
-            <Link href="/register" asChild>
-              <Pressable
-                onPressIn={() => setSecondaryPressed(true)}
-                onPressOut={() => setSecondaryPressed(false)}
-                style={StyleSheet.flatten([
-                  styles.buttonSecondary,
-                  { borderColor: theme.border },
-                  secondaryPressed && styles.pressed,
-                ])}>
-                <ThemedText type="label">Créer un compte</ThemedText>
-              </Pressable>
-            </Link>
+            {/* Navigation directe via `router.push` (pas de <Link asChild>) :
+                le mécanisme de fusion de props de Slot (expo-router
+                ui/Slot.js) s'est révélé source de bugs de rendu réels en
+                Release (texte tronqué constaté sur build 16, invisible en
+                test Jest car aucune vraie mesure Yoga n'y est effectuée) —
+                mêmes symptômes que le bug de style déjà documenté et corrigé
+                en Phase 7.3. Un Pressable non enveloppé par Slot est le
+                composant qu'utilisent déjà tous les autres écrans de l'app
+                pour naviguer (voir profile.tsx, security.tsx). */}
+            <Pressable
+              onPress={() => router.push('/login')}
+              onPressIn={() => setPrimaryPressed(true)}
+              onPressOut={() => setPrimaryPressed(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Se connecter"
+              style={[styles.buttonPrimary, { backgroundColor: theme.accent }, primaryPressed && styles.pressed]}>
+              <ThemedText type="label" style={{ color: theme.onAccent }}>
+                Se connecter
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/register')}
+              onPressIn={() => setSecondaryPressed(true)}
+              onPressOut={() => setSecondaryPressed(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Créer un compte"
+              style={[styles.buttonSecondary, { borderColor: theme.border }, secondaryPressed && styles.pressed]}>
+              <ThemedText type="label">Créer un compte</ThemedText>
+            </Pressable>
           </ThemedView>
         </Animated.View>
       </SafeAreaView>
