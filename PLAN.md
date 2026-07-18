@@ -844,11 +844,137 @@ ci-dessous).
   anomalie résiduelle. Détail dans `TEST_FINAL_BUILD17.md`.
 - Phase 7 close.
 
-## Phase 8 — Durcissement & polish restant
+## Phase 8 — Distribution privée Android/iOS
 
+White Alpha reste une application **strictement privée** : aucune
+publication publique (Google Play, App Store grand public), aucun
+référencement, aucun listing automatique. Toute distribution passe par des
+canaux fermés, réservés aux membres autorisés.
+
+### 8.1 — Audit Android/iOS
+- État des lieux technique multiplateforme (dépendances Expo compatibles
+  iOS, permissions, configuration native).
 - Revue des policies RLS Supabase (accès conversations/messages/médias).
-- Gestion des erreurs réseau, états de chargement, écrans vides
+- Gestion des erreurs réseau, états de chargement, écrans vides restants
   (au-delà de la refonte visuelle de la Phase 7).
+
+### 8.2 — Corrections multiplateformes
+- Ajustements de code nécessaires pour une compatibilité iOS réelle
+  (composants, permissions, comportements spécifiques à la plateforme).
+
+### 8.3 — Configuration et build iOS
+- Ce qui peut être préparé sous Windows (configuration `app.json`/
+  `eas.json`, code, assets) vs. ce qui nécessite un compte Apple
+  Developer, un Mac ou un service de build distant (EAS Build cloud).
+
+### 8.4 — Page privée White Alpha
+- Page **non publique**, non destinée au référencement : aucune
+  publication Google Play, aucune publication App Store publique.
+- `<meta name="robots" content="noindex, nofollow">` obligatoire.
+- Accès protégé **côté serveur** (mot de passe, code d'invitation ou lien
+  privé) — jamais une protection uniquement en JavaScript côté client.
+- Aucune clé secrète dans le code client.
+- Aucun listing de répertoire (dossier de téléchargement jamais
+  navigable directement).
+- Liens temporaires ou protégés si possible.
+- Texte principal : *« White Alpha — La meute privée »* — sous-titre :
+  *« Une messagerie privée réservée aux membres autorisés. »*
+- Bouton Android actif uniquement une fois l'APK validé ; bouton iPhone
+  lié à TestFlight ou marqué *« Version iPhone bientôt disponible »* tant
+  qu'aucun lien TestFlight valide n'existe.
+- Aucune promesse d'installation directe d'un IPA depuis le navigateur.
+
+### 8.5 — Politique de confidentialité et support
+- Document de confidentialité adapté à une app privée (pas de vitrine
+  publique), point de contact support.
+
+### 8.6 — Distribution privée Android
+- Téléchargement direct d'un APK Release signé depuis la page privée
+  (lien temporaire/protégé si possible).
+- Affichage : version actuelle, date du build, taille, SHA-256,
+  compatibilité Android minimale, avertissement « source externe »,
+  guide d'installation.
+- L'APK n'est **jamais** suivi par Git ; emplacement de publication
+  séparé et sécurisé, hors dépôt.
+- Aucune publication Google Play.
+
+### 8.7 — Distribution privée iPhone
+- Solutions étudiées : **TestFlight** (tests privés, limite ~10 000
+  testeurs, build expire après 90 jours), **distribution Ad Hoc** (liste
+  d'appareils enregistrés, limite 100 appareils/an, UDID à collecter),
+  **Apple Business Manager / Custom Apps** (si organisation éligible),
+  **Enterprise** (uniquement si les conditions Apple — usage interne
+  strict à une entité, jamais public — sont réellement remplies).
+- Nécessite dans tous les cas : compte Apple Developer (payant), et soit
+  un Mac soit un build iOS distant (EAS Build).
+- Pas d'IPA public non signé, pas de promesse d'installation directe
+  depuis une page web.
+- Recommandation à documenter précisément une fois l'audit 8.1 fait.
+
+### 8.8 — Validation finale
+- Vérification croisée de tous les points ci-dessus, test réel des deux
+  canaux de distribution, clôture de phase.
+
+## Phase 9 — Optimisation, pièces jointes et confidentialité locale
+
+### 9.1 — Bouton trombone
+- Remplacer les boutons Photo et Vidéo séparés par un seul bouton
+  trombone, menu : Choisir une photo / Choisir une vidéo / Annuler.
+- Aperçu avant envoi, progression, nouvelle tentative.
+- Suppression des fichiers temporaires après réussite ou annulation.
+- Aucune permission supplémentaire inutile.
+
+### 9.2 — Nettoyer les données locales d'une discussion
+Action « Nettoyer les données locales », supprime uniquement sur le
+téléphone courant : cache local de la conversation, miniatures, photos
+et vidéos temporaires, uploads abandonnés, brouillon local, données de
+prévisualisation.
+
+Ne supprime jamais : les messages Supabase, les médias distants, la
+conversation des autres utilisateurs, le profil, l'avatar, le compte.
+
+Après nettoyage, la discussion pourra être rechargée depuis le serveur.
+
+### 9.3 — Suppression serveur séparée
+Prévoir séparément « Supprimer la discussion ». Ne pas l'implémenter
+avant audit de : RLS, propriété de la conversation, suppression des
+messages, pièces jointes Storage, conséquences pour les autres membres,
+confirmation renforcée, authentification récente.
+
+### 9.4 — Nettoyage automatique local
+Étudier les choix : Jamais / À la fermeture de l'application / Après 15
+minutes / Après 1 heure / À la déconnexion.
+
+Ne jamais effacer la session SecureStore sans choix explicite de
+déconnexion.
+
+### 9.5 — Nettoyage global
+Dans Profil → Sécurité ou Stockage : « Nettoyer les données locales de
+White Alpha ». Afficher lorsque cela est calculable : espace local
+utilisé, nombre de fichiers temporaires, nombre de conversations en
+cache, date du dernier nettoyage.
+
+### 9.6 — Sécurité de suppression
+- Supprimer uniquement dans les répertoires autorisés de White Alpha.
+- Utiliser une liste blanche stricte, interdire toute traversée de
+  chemin.
+- Ne jamais supprimer un fichier extérieur au stockage contrôlé par
+  l'app.
+- Ne jamais enregistrer les chemins locaux dans les logs.
+
+### 9.7 — Tests
+Prévoir des tests pour : trombone, photo, vidéo, annulation, nettoyage
+local, conservation des données distantes, restauration après
+réouverture, échec sans perte de données, suppression sécurisée des
+fichiers temporaires, protection contre un chemin extérieur, Android et
+iOS, accessibilité.
+
+### 9.8 — Audit préalable
+Avant toute implémentation, présenter : données actuellement stockées
+localement, caches Android et iOS, fichiers temporaires, durée de
+conservation, différence entre nettoyage local et suppression serveur,
+risques de perte de données, fichiers à modifier, éventuelle migration
+nécessaire, nécessité de nouveaux builds Android et iOS.
 
 ## Décision d'architecture — Supabase & Railway
 
