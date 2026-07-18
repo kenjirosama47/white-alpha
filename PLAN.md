@@ -822,7 +822,7 @@ constaté après clôture.
     (identique aux builds 12/13/14, même keystore EAS)
 - Phase 6 Notifications close.
 
-## Phase 7 — Refonte Design, identité visuelle et UX White Alpha
+## Phase 7 — Refonte Design, identité visuelle et UX White Alpha : TERMINÉE
 
 Phase exclusivement consacrée à l'interface, au branding, à l'expérience
 utilisateur et aux assets visuels : identité loup blanc (icône, splash,
@@ -830,7 +830,19 @@ utilisateur et aux assets visuels : identité loup blanc (icône, splash,
 Alpha, Design System (couleurs, typographies, espacements, composants),
 audit UX écran par écran. Aucune modification de Supabase, des
 notifications, du MFA, de la sécurité, des migrations ou des règles RLS
-dans cette phase.
+dans cette phase (hors correctif ciblé `other_avatar_preset`, voir
+ci-dessous).
+
+- **Correctif avatars et discussion — validé sur téléphone réel.** Deux
+  anomalies constatées sur le build 16 (avatar loup non actualisé sur
+  certains écrans, style de discussion non appliqué) corrigées : résolution
+  d'avatar centralisée (`resolveAvatarDisplay`), profil partagé
+  (`MyProfileProvider`, actualisation immédiate sans redémarrage), palette
+  sombre imposée sur l'écran de discussion (`forcedScheme`).
+- **Build stable validé : build 17 (versionCode 17).** 24/24 contrôles
+  manuels validés sur téléphone réel (12 avatars + 12 discussion), aucune
+  anomalie résiduelle. Détail dans `TEST_FINAL_BUILD17.md`.
+- Phase 7 close.
 
 ## Phase 8 — Durcissement & polish restant
 
