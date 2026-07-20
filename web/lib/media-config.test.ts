@@ -51,3 +51,13 @@ describe('maxSizeForMimeType', () => {
     expect(maxSizeForMimeType('video/mp4')).toBe(MAX_VIDEO_SIZE_BYTES);
   });
 });
+
+describe('limites métier — valeurs numériques exactes (Phase 8.5.5, non affectées par le correctif proxyClientMaxBodySize)', () => {
+  it('MAX_IMAGE_SIZE_BYTES reste strictement 10 Mo (10 485 760 octets)', () => {
+    expect(MAX_IMAGE_SIZE_BYTES).toBe(10 * 1024 * 1024);
+  });
+
+  it('MAX_VIDEO_SIZE_BYTES reste strictement 50 Mo (52 428 800 octets) — jamais 60 Mo (proxyClientMaxBodySize n’est qu’un plafond de transport, pas une limite métier)', () => {
+    expect(MAX_VIDEO_SIZE_BYTES).toBe(50 * 1024 * 1024);
+  });
+});

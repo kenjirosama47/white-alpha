@@ -212,7 +212,7 @@ describe('POST /conversations/[id]/media (Phase 8.5.2)', () => {
     expect(client.__mocks.mockRpc).not.toHaveBeenCalled();
   });
 
-  it('fichier trop volumineux : refusé avant tout upload Storage', async () => {
+  it('image trop volumineuse (> 10 Mo) : refusée avant tout upload Storage', async () => {
     const client = buildMockClient();
     mockCreateClient.mockResolvedValue(client);
 
@@ -221,6 +221,24 @@ describe('POST /conversations/[id]/media (Phase 8.5.2)', () => {
     const file = new File([oversized], 'photo.jpg', { type: 'image/jpeg' });
 
     const response = await callRoute(buildRequest(buildFormData(file)));
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toEqual({ ok: false, code: 'invalid_file' });
+    expect(client.__mocks.mockUpload).not.toHaveBeenCalled();
+  });
+
+  it('vidéo trop volumineuse (> 50 Mo) : refusée avant tout upload Storage — la limite métier reste 50 Mo malgré proxyClientMaxBodySize=60mb (Phase 8.5.5)', async () => {
+    const client = buildMockClient();
+    mockCreateClient.mockResolvedValue(client);
+
+    const oversized = new Uint8Array(50 * 1024 * 1024 + 1);
+    oversized.set(MP4_BYTES, 0);
+    const file = new File([oversized], 'video.mp4', { type: 'video/mp4' });
+
+    const response = await callRoute(
+      buildRequest(buildFormData(file, { durationMs: '5000' })),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(400);

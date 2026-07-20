@@ -13,6 +13,14 @@
   /* Barre fixée en bas de l'écran de discussion (voir MessageThread.module.css) : le clavier mobile ne la masque jamais, la mise en page suit le viewport visuel. */
 }
 
+/* Développement uniquement (voir MessageComposer.tsx) : réserve un espace à
+   gauche pour ne jamais laisser l'indicateur de développement Next.js
+   (badge fixe, coin bas-gauche du viewport) recouvrir le trombone. Jamais
+   appliquée en production, où ce badge n'existe pas. */
+.composerDevSpacing {
+  padding-left: 64px;
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;

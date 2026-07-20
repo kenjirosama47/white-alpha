@@ -66,6 +66,14 @@ export function MessageComposer({ conversationId, disabled, onSend }: MessageCom
 
   const canSubmit = attachment ? !isAttachmentBusy : value.trim().length > 0;
 
+  // Développement uniquement (Phase 8.5.5, correctif) : l'indicateur de
+  // développement Next.js (badge rond fixe, coin bas-gauche du viewport,
+  // hors de notre contrôle DOM — jamais modifié ici) recouvre sinon le
+  // trombone, cette barre étant elle-même fixée en bas de l'écran. Sans
+  // effet en production, où ce badge n'existe jamais.
+  const composerClassName =
+    process.env.NODE_ENV !== 'production' ? `${styles.composer} ${styles.composerDevSpacing}` : styles.composer;
+
   return (
     <div className={styles.composerWrapper}>
       {attachment && (
@@ -79,7 +87,7 @@ export function MessageComposer({ conversationId, disabled, onSend }: MessageCom
         />
       )}
 
-      <div className={styles.composer}>
+      <div className={composerClassName}>
         <AttachmentMenu disabled={disabled || isAttachmentBusy} onSelectImage={selectImage} onSelectVideo={selectVideo} />
 
         <label htmlFor="message-input" className={styles.visuallyHidden}>

@@ -266,19 +266,40 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
     },
   );
 
-  it("media-src (Phase 8.5.4) : 'self' et l'origine Supabase uniquement, jamais * ni blob:/data: ni domaine externe", async () => {
+  it("media-src (Phase 8.5.4/8.5.5) : 'self', blob: et l'origine Supabase uniquement, jamais * ni data: ni domaine externe", async () => {
     mockSession(null);
 
     const response = await proxy(makeRequest('/'));
     const csp = response.headers.get('Content-Security-Policy');
 
-    expect(csp).toContain("media-src 'self' https://example.supabase.co");
+    expect(csp).toContain("media-src 'self' blob: https://example.supabase.co");
     expect(csp).not.toMatch(/media-src[^;]*\*/);
-    expect(csp).not.toMatch(/media-src[^;]*blob:/);
     expect(csp).not.toMatch(/media-src[^;]*data:/);
   });
 
-  it('les autres directives CSP restent inchangées après l’ajout de media-src (Phase 8.5.4)', async () => {
+  it("img-src (Phase 8.5.5, correctif aperçu local) : blob: ajouté, 'self'/data:/origine Supabase conservés, jamais * ni domaine externe", async () => {
+    mockSession(null);
+
+    const response = await proxy(makeRequest('/'));
+    const csp = response.headers.get('Content-Security-Policy');
+
+    expect(csp).toContain("img-src 'self' data: blob: https://example.supabase.co");
+    expect(csp).not.toMatch(/img-src[^;]*\*/);
+  });
+
+  it("blob: n'est autorisé que dans img-src et media-src, jamais ailleurs (script-src, connect-src, etc.)", async () => {
+    mockSession(null);
+
+    const response = await proxy(makeRequest('/'));
+    const csp = response.headers.get('Content-Security-Policy') ?? '';
+    const directives = csp.split(';').map((directive) => directive.trim());
+
+    const directivesWithBlob = directives.filter((directive) => directive.includes('blob:'));
+    expect(directivesWithBlob).toHaveLength(2);
+    expect(directivesWithBlob.every((directive) => directive.startsWith('img-src') || directive.startsWith('media-src'))).toBe(true);
+  });
+
+  it('les autres directives CSP restent inchangées après le correctif blob: (Phase 8.5.5)', async () => {
     mockSession(null);
 
     const response = await proxy(makeRequest('/'));
@@ -287,9 +308,9 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("strict-dynamic");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).toContain("img-src 'self' data: https://example.supabase.co");
     expect(csp).toContain("font-src 'self'");
     expect(csp).toContain("connect-src 'self' https://example.supabase.co wss://example.supabase.co");
+    expect(csp).not.toMatch(/connect-src[^;]*blob:/);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("form-action 'self'");

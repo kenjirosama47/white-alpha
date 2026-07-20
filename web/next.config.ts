@@ -30,6 +30,18 @@ const nextConfig: NextConfig = {
   // `eslint` dédié dans next.config — `npm run lint` reste une étape
   // séparée et obligatoire de la validation, voir package.json.)
   typescript: { ignoreBuildErrors: false },
+  experimental: {
+    // Phase 8.5.5, correctif — par défaut (10 Mo), Next.js tronque
+    // silencieusement le corps de toute requête passant par proxy.ts avant
+    // qu'elle n'atteigne la route (`POST /conversations/[id]/media`),
+    // corrompant le multipart/form-data d'un envoi vidéo légitime bien avant
+    // toute validation applicative (voir media-server-validation.ts). 60 Mo
+    // laisse passer un fichier de 50 Mo (MAX_VIDEO_SIZE_BYTES, media-config.ts)
+    // plus la surcharge multipart — ne change JAMAIS les limites métier
+    // elles-mêmes (toujours 50 Mo vidéo / 10 Mo image, appliquées après,
+    // dans validateMediaFileOnServer).
+    proxyClientMaxBodySize: '60mb',
+  },
   async headers() {
     return [
       {

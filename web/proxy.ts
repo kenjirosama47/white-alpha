@@ -134,13 +134,18 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
     // sans avoir besoin d'énumérer chaque hash — recette officielle Next.js.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${scriptSrcEval}`,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: ${supabaseOrigin}`,
-    // media-src (Phase 8.5.4) : uniquement l'origine Supabase déjà autorisée
-    // ailleurs (img-src/connect-src) — nécessaire pour lire une vidéo depuis
-    // une URL signée Supabase Storage (origine externe, jamais couverte par
-    // `default-src 'self'` seul). Ni `*`, ni `blob:`/`data:` (jamais généré
-    // pour un média distant), ni domaine externe supplémentaire.
-    `media-src 'self' ${supabaseOrigin}`,
+    // `blob:` (Phase 8.5.5, correctif) : nécessaire pour l'aperçu local d'une
+    // pièce jointe avant envoi (Phase 8.5.3, `URL.createObjectURL(file)`,
+    // jamais persisté — voir `useAttachmentUpload.ts`) — sans lien avec les
+    // médias déjà envoyés (URLs signées Supabase, origine `supabaseOrigin`
+    // ci-dessous). Ni `*`, ni `data:` (jamais utilisé), ni domaine externe.
+    `img-src 'self' data: blob: ${supabaseOrigin}`,
+    // media-src : `blob:` pour l'aperçu vidéo local avant envoi (même
+    // raison que img-src ci-dessus) + `supabaseOrigin` pour lire une vidéo
+    // déjà envoyée depuis une URL signée Supabase Storage (origine externe,
+    // jamais couverte par `default-src 'self'` seul). Ni `*`, ni `data:`
+    // (jamais généré pour un média), ni domaine externe supplémentaire.
+    `media-src 'self' blob: ${supabaseOrigin}`,
     `font-src 'self'`,
     // connect-src : uniquement le projet Supabase (API REST + Realtime
     // WebSocket, ce dernier pas encore utilisé dans cette fondation mais
