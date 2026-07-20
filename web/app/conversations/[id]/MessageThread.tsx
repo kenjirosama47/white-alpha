@@ -153,7 +153,7 @@ export function MessageThread({ conversationId, header, initialMessages, current
         </p>
       )}
 
-      <MessageComposer disabled={isSending || !isOnline} onSend={send} />
+      <MessageComposer conversationId={conversationId} disabled={isSending || !isOnline} onSend={send} />
     </div>
   );
 }
