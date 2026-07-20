@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 
+import { Button } from '@/components/Button';
 import { PageShell } from '@/components/PageShell';
 import { MEMBER_HOME_COPY } from '@/lib/copy';
 import { createClient } from '@/lib/supabase/server';
@@ -33,14 +35,25 @@ export default async function MemberHomePage() {
     );
   }
 
+  // Jamais l'email complet à l'écran (voir anomalie Phase 8.4) : seul le
+  // pseudonyme public, déjà utilisé partout ailleurs dans l'app (recherche,
+  // conversations) — `profiles` est RLS-protégée, une ligne uniquement pour
+  // l'utilisateur courant ici.
+  const { data: profile } = await supabase.from('profiles').select('username').eq('id', user.id).single();
+  const displayName = profile?.username ?? MEMBER_HOME_COPY.fallbackName;
+
   return (
     <PageShell>
       <h1>{MEMBER_HOME_COPY.welcomeTitle}</h1>
-      <p>Connecté en tant que {user.email}.</p>
-      <p>Les conversations, la recherche et le profil arrivent dans une prochaine sous-phase (Phase 8.4).</p>
+      <p>Connecté en tant que {displayName}.</p>
+      <Button href="/conversations" variant="primary">
+        Voir mes conversations
+      </Button>
+      <p>Le profil complet arrive dans une prochaine sous-phase.</p>
       <form action={logoutAction}>
         <button type="submit">Se déconnecter</button>
       </form>
+      <Link href="/profil">Profil</Link>
     </PageShell>
   );
 }

@@ -21,12 +21,14 @@ const PRECACHE_URLS = ['/offline', '/manifest.webmanifest', '/icons/icon-192.png
 
 // Préfixes/chemins jamais mis en cache, quelle que soit la stratégie
 // ci-dessous — zone authentifiée (Phase 8.3 : /membre, /profil,
-// /installation-privee), étapes d'authentification sensibles
-// (/verification-mfa, /reset-password) et formulaires d'identifiants.
+// /installation-privee ; Phase 8.4 : /conversations, messages privés),
+// étapes d'authentification sensibles (/verification-mfa,
+// /reset-password) et formulaires d'identifiants.
 const NEVER_CACHE_PATH_PREFIXES = [
   '/membre',
   '/profil',
   '/installation-privee',
+  '/conversations',
   '/verification-mfa',
   '/reset-password',
   '/login',

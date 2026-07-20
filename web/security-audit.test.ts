@@ -96,6 +96,61 @@ describe('web/ — audit statique de sécurité (Phase 8.2)', () => {
   });
 });
 
+describe('web/ — audit statique de sécurité (Phase 8.4, réinitialisation mot de passe)', () => {
+  it('app/membre/page.tsx n’affiche jamais user.email (pseudonyme public uniquement, anomalie corrigée)', () => {
+    const content = readFileSync(path.join(ROOT, 'app', 'membre', 'page.tsx'), 'utf8');
+
+    expect(content).not.toMatch(/user\.email/);
+  });
+
+  it('app/auth/callback/route.ts ne construit jamais une redirection interpolant error/error_code/error_description (uniquement des cibles fixes)', () => {
+    const content = readFileSync(path.join(ROOT, 'app', 'auth', 'callback', 'route.ts'), 'utf8');
+
+    expect(content).not.toMatch(/error_description/);
+    expect(content).not.toMatch(/\$\{errorParam\}/);
+  });
+
+  it('app/reset-password/page.tsx revérifie une session valide et redirige vers /forgot-password (jamais /membre) si absente', () => {
+    const content = readFileSync(path.join(ROOT, 'app', 'reset-password', 'page.tsx'), 'utf8');
+
+    expect(content).toMatch(/if\s*\(\s*!user\s*\)/);
+    expect(content).toMatch(/redirect\(['"]\/forgot-password\?reason=link_expired['"]\)/);
+    expect(content).not.toMatch(/redirect\(['"]\/membre['"]\)/);
+  });
+
+  it('app/reset-password/actions.ts ne journalise jamais le mot de passe saisi', () => {
+    const content = readFileSync(path.join(ROOT, 'app', 'reset-password', 'actions.ts'), 'utf8');
+
+    expect(content).not.toMatch(/console\.\w+\([^)]*\bpassword\b/i);
+  });
+});
+
+describe('web/ — audit statique de sécurité (Phase 8.4, conversations)', () => {
+  it("aucun dangerouslySetInnerHTML nulle part dans web/ (aucune injection HTML de message)", () => {
+    const offenders = sourceFiles.filter((file) => readFileSync(file, 'utf8').includes('dangerouslySetInnerHTML'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('aucun contenu de message journalisé via console.* (variable `content` ou `message.content`)', () => {
+    const offenders = sourceFiles.filter((file) => {
+      const content = readFileSync(file, 'utf8');
+      return /console\.\w+\([^)]*\b(content|message\.content|normalized)\b/i.test(content);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('aucune utilisation d’IndexedDB (aucun stockage persistant de message sans décision explicite)', () => {
+    const offenders = sourceFiles.filter((file) => {
+      const content = readFileSync(file, 'utf8');
+      return /\bindexedDB\b/.test(content) || /\bopenDatabase\b/.test(content);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('public/sw.js — audit statique du Service Worker (Phase 8.2)', () => {
   const swContent = readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
 
@@ -103,6 +158,10 @@ describe('public/sw.js — audit statique du Service Worker (Phase 8.2)', () => 
     expect(swContent).toContain("'/membre'");
     expect(swContent).toContain("'/verification-mfa'");
     expect(swContent).toContain('NEVER_CACHE_PATH_PREFIXES');
+  });
+
+  it('exclut explicitement /conversations du cache (Phase 8.4 — messages privés)', () => {
+    expect(swContent).toContain("'/conversations'");
   });
 
   it('exclut explicitement les URLs signées (paramètres token/Signature) du cache', () => {

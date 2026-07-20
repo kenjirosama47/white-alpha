@@ -22,11 +22,15 @@ export async function forgotPasswordAction(
     // point d'entrée unique que la confirmation d'inscription, seul capable
     // de gérer les trois formats de lien possibles selon la configuration
     // Supabase (voir `app/auth/callback/route.ts`, calqué sur le mobile
-    // `src/app/auth/callback.tsx`). La redirectTo devra être ajoutée aux
-    // "Redirect URLs" autorisées côté Supabase Auth une fois un domaine réel
-    // déployé (Phase 8.4+) — jamais fait automatiquement ici.
+    // `src/app/auth/callback.tsx`). Le paramètre `next=/reset-password`
+    // ci-dessous est le seul moyen fiable de distinguer un échec de
+    // récupération d'un échec de confirmation d'inscription au niveau du
+    // callback (Phase 8.4) : Supabase ne réachemine pas systématiquement
+    // `type` dans sa redirection d'erreur (`error`/`error_code`), mais
+    // réachemine toujours l'intégralité de la chaîne `redirectTo` fournie
+    // ici, y compris ce paramètre.
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getAuthCallbackUrl(),
+      redirectTo: `${getAuthCallbackUrl()}?next=/reset-password`,
     });
   }
 

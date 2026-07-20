@@ -14,21 +14,17 @@ import { resetPasswordAction, type ResetPasswordState } from './actions';
 // Défini ici (composant client), jamais exporté depuis actions.ts : un
 // fichier "use server" ne peut exporter que des fonctions asynchrones — voir
 // la même note dans `app/inscription/RegisterForm.tsx`.
-const initialState: ResetPasswordState = { error: null, success: false };
+const initialState: ResetPasswordState = { error: null };
 
+/**
+ * Aucun état de succès affiché ici (Phase 8.4) : `resetPasswordAction`
+ * redirige elle-même vers `/login?reason=password_updated` en cas de
+ * réussite (`redirect()` interrompt l'exécution avant tout retour normal à
+ * ce composant) — le message de confirmation s'affiche sur `/login`, jamais
+ * ici.
+ */
 export function ResetPasswordForm() {
   const [state, formAction, isPending] = useActionState(resetPasswordAction, initialState);
-
-  if (state.success) {
-    return (
-      <div className={formStyles.form}>
-        <p role="status">Ton mot de passe a été changé. Tu peux maintenant te connecter.</p>
-        <Button href="/login" variant="primary">
-          Aller à la connexion
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <form action={formAction} className={formStyles.form}>

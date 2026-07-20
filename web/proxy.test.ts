@@ -47,7 +47,7 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
     mockGetSessionAuthenticatorLevels.mockResolvedValue(NO_MFA_LEVELS);
   });
 
-  describe.each(['/membre', '/profil', '/installation-privee'])('route protégée %s', (path) => {
+  describe.each(['/membre', '/profil', '/installation-privee', '/conversations'])('route protégée %s', (path) => {
     it('redirige vers /login sans utilisateur authentifié', async () => {
       mockSession(null);
 
@@ -102,6 +102,19 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
       expect(response.headers.get('Cache-Control')).toBe('no-store');
     });
   });
+
+  describe.each(['/reset-password', '/auth/callback'])(
+    'route publique non authentifiée %s (Phase 8.4 — anomalie whitealpha:// corrigée)',
+    (path) => {
+      it('pose Cache-Control: no-store même sans session (jamais mis en cache, jamais de lien de récupération conservé)', async () => {
+        mockSession(null);
+
+        const response = await proxy(makeRequest(path));
+
+        expect(response.headers.get('Cache-Control')).toBe('no-store');
+      });
+    },
+  );
 
   it('distingue une session expirée (message dédié) d’un visiteur jamais connecté', async () => {
     mockSession(null, true);
@@ -167,6 +180,27 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
       expect(response.headers.get('location')).toContain('/membre');
     },
   );
+
+  it(
+    'exception Phase 8.4 : /forgot-password?reason=link_expired reste accessible même pour un utilisateur déjà authentifié — ' +
+      'jamais /membre en repli silencieux pendant un parcours de récupération de mot de passe',
+    async () => {
+      mockSession(AUTHENTICATED_USER);
+
+      const response = await proxy(makeRequest('/forgot-password?reason=link_expired'));
+
+      expect(response.status).not.toBe(307);
+      expect(response.headers.get('location')).toBeNull();
+    },
+  );
+
+  it('un utilisateur déjà authentifié visitant /forgot-password SANS reason=link_expired est bien redirigé vers /membre comme avant (exception non générale)', async () => {
+    mockSession(AUTHENTICATED_USER);
+
+    const response = await proxy(makeRequest('/forgot-password'));
+
+    expect(response.headers.get('location')).toContain('/membre');
+  });
 
   it("n'exige pas d'authentification pour une page publique (/install)", async () => {
     mockSession(null);

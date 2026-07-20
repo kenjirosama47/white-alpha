@@ -26,16 +26,16 @@ export const SUPABASE_PUBLISHABLE_KEY = supabasePublishableKey;
  * dès maintenant est strictement plus sûr, sans aucune perte de
  * fonctionnalité actuelle.
  *
- * LIMITE À REVISITER (Phase suivante, conversations/Realtime) : le jour où
- * un `createBrowserClient` est introduit côté client pour Realtime, ce
- * client aura besoin de lire la session — impossible depuis un cookie
- * `httpOnly`. Deux options à trancher à ce moment-là, jamais avant : (a)
- * exposer un jeton d'accès de très courte durée par un canal dédié
- * (ex. endpoint serveur qui le fournit à la demande, jamais stocké), ou
- * (b) repasser `httpOnly` à `false` pour ce cookie précis en acceptant le
- * compromis (lecture JS possible), avec CSP stricte comme mitigation contre
- * le XSS. Ne jamais trancher cela silencieusement dans une phase ultérieure
- * sans le documenter explicitement ici.
+ * DÉCISION (Phase 8.4, Realtime conversations) : ce cookie reste `httpOnly`
+ * — le client navigateur (`lib/supabase/client.ts`, désormais utilisé pour
+ * Realtime) ne le lit jamais directement. À la place, une Server Action lit
+ * la session côté serveur (où le cookie httpOnly reste lisible) et transmet
+ * uniquement `access_token`/`refresh_token` au client, qui les garde en
+ * mémoire (`persistSession: false`, jamais dans le « Local Storage » du
+ * navigateur — voir la note dans `client.ts`). Option (b) de l'ancienne note ci-dessous (passer
+ * ce cookie en non-httpOnly) a été explicitement écartée : option (a)
+ * retenue, risque XSS résiduel identique à celui de tout jeton en mémoire
+ * JS, mitigé par la CSP stricte déjà en place.
  */
 export const SUPABASE_COOKIE_OPTIONS: CookieOptions = {
   path: '/',

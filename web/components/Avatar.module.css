@@ -1,0 +1,18 @@
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background-color: var(--color-surface-high);
+}
+
+.initial {
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-high);
+  color: var(--color-text);
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+}

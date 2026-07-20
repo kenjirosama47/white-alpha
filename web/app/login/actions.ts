@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 
+import { logAuthDiagnostic } from '@/lib/auth-diagnostics';
 import { sanitizeRedirectPath } from '@/lib/redirect';
 import { createClient } from '@/lib/supabase/server';
 
@@ -32,6 +33,11 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
+    // Diagnostic serveur temporaire (voir lib/auth-diagnostics.ts) : catégorie
+    // Supabase (ex. "email_not_confirmed", "invalid_credentials") et statut
+    // HTTP uniquement, jamais l'email/mot de passe saisis. Message générique
+    // ci-dessous inchangé : ne casse jamais l'anti-énumération.
+    logAuthDiagnostic('login', error.code ?? 'unknown_error', error.status);
     // Message générique uniquement : ne jamais révéler si l'email existe ou
     // non, ni le détail technique Supabase brut.
     return { error: GENERIC_ERROR };

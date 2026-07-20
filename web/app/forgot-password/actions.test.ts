@@ -55,4 +55,12 @@ describe('forgotPasswordAction (Phase 8.3)', () => {
     expect(mockResetPasswordForEmail).not.toHaveBeenCalled();
     expect(result.submitted).toBe(true);
   });
+
+  it('redirectTo porte next=/reset-password (Phase 8.4, seul moyen fiable de distinguer un échec de récupération d’un échec de confirmation au niveau du callback)', async () => {
+    await forgotPasswordAction({ submitted: false }, formData({ email: 'a@example.com' }));
+
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith('a@example.com', {
+      redirectTo: expect.stringContaining('next=/reset-password'),
+    });
+  });
 });

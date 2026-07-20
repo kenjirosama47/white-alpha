@@ -1,11 +1,12 @@
 'use server';
 
+import { redirect } from 'next/navigation';
+
 import { createClient } from '@/lib/supabase/server';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validation';
 
 export type ResetPasswordState = {
   error: string | null;
-  success: boolean;
 };
 
 const GENERIC_ERROR = 'Une erreur est survenue. Réessaie.';
@@ -23,28 +24,35 @@ function translateError(message: string): string {
 
 /**
  * Valide uniquement dans une session de récupération (établie par
- * `/auth/callback`, jamais atteinte directement autrement) — voir
- * `src/contexts/auth-context.tsx#updatePassword` (mobile), même logique.
- * `updateUser` révoque implicitement le lien à usage unique déjà consommé :
- * aucune invalidation manuelle supplémentaire nécessaire.
+ * `/auth/callback`, jamais atteinte directement autrement — revérifié aussi
+ * dans `page.tsx`) — voir `src/contexts/auth-context.tsx#updatePassword`
+ * (mobile), même logique. `updateUser` révoque implicitement le lien à
+ * usage unique déjà consommé : aucune invalidation manuelle supplémentaire
+ * nécessaire pour le lien lui-même.
+ *
+ * Succès (Phase 8.4) : déconnexion explicite de la session de récupération
+ * (jamais laissée active silencieusement) puis redirection serveur vers
+ * `/login?reason=password_updated` — jamais un état `success` renvoyé au
+ * composant, `redirect()` interrompt l'exécution avant tout retour normal.
  */
 export async function resetPasswordAction(_prevState: ResetPasswordState, formData: FormData): Promise<ResetPasswordState> {
   const password = String(formData.get('password') ?? '');
   const confirmPassword = String(formData.get('confirmPassword') ?? '');
 
   if (password.length < MIN_PASSWORD_LENGTH) {
-    return { error: `Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`, success: false };
+    return { error: `Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.` };
   }
   if (password !== confirmPassword) {
-    return { error: PASSWORD_MISMATCH_ERROR, success: false };
+    return { error: PASSWORD_MISMATCH_ERROR };
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
-    return { error: translateError(error.message), success: false };
+    return { error: translateError(error.message) };
   }
 
-  return { error: null, success: true };
+  await supabase.auth.signOut();
+  redirect('/login?reason=password_updated');
 }

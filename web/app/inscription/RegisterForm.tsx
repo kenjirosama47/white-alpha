@@ -24,7 +24,14 @@ export function RegisterForm() {
   const [state, formAction, isPending] = useActionState(registerAction, initialState);
 
   if (state.submitted) {
-    return <p role="status">{REGISTER_SUBMITTED_COPY.message}</p>;
+    return (
+      <div className={formStyles.form}>
+        <p role="status">{REGISTER_SUBMITTED_COPY.message}</p>
+        <Link href="/login" className={formStyles.link}>
+          Retour à la connexion
+        </Link>
+      </div>
+    );
   }
 
   return (

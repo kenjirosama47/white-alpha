@@ -1,0 +1,9 @@
+.banner {
+  width: 100%;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  background-color: var(--color-warning);
+  color: var(--color-background);
+}

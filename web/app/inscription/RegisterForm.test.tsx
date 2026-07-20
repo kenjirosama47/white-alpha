@@ -53,4 +53,18 @@ describe('RegisterForm (Phase 8.3, anti-énumération)', () => {
     expect(document.body.textContent).not.toContain('existe déjà');
     expect(document.body.textContent).not.toContain('Compte déjà existant');
   });
+
+  it('après soumission : un lien "Retour à la connexion" reste visible (jamais bloqué sans action possible)', async () => {
+    mockRegisterAction.mockResolvedValue({ error: null, submitted: true });
+
+    render(<RegisterForm />);
+    fillValidForm();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+    });
+
+    await screen.findByRole('status');
+    expect(screen.getByRole('link', { name: 'Retour à la connexion' })).toBeTruthy();
+  });
 });

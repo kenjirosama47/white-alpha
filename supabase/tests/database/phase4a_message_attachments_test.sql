@@ -4,7 +4,7 @@
 -- Ne jamais exécuter contre le projet distant.
 
 begin;
-select plan(27);
+select plan(31);
 
 -- ---------------------------------------------------------------------------
 -- Fixtures : 3 utilisateurs de test (A, B, C non membre de la conversation
@@ -168,6 +168,78 @@ select is(
   (select message_type from t_text),
   'text',
   'Le message créé par create_text_message est de type text'
+);
+
+-- ---------------------------------------------------------------------------
+-- Identité de l'émetteur (sender_id) — reproduction contrôlée d'une
+-- anomalie observée en test manuel Web où un message de B apparaissait
+-- attribué à A. create_text_message ne prenant aucun paramètre sender_id
+-- (signature : uuid, text uniquement — voir test « anon et public... » plus
+-- haut), la seule source possible est auth.uid() résolu au moment de
+-- l'appel. Ces tests vérifient que deux JWT différents, appelés
+-- successivement dans la MÊME session de test (comme le fait PostgREST pour
+-- deux requêtes HTTP différentes), ne partagent jamais d'identité.
+-- ---------------------------------------------------------------------------
+
+-- 14b. sender_id du message de A correspond exactement à auth.uid() de A au
+--      moment de l'appel (jamais un id différent, jamais NULL).
+select is(
+  (select sender_id from t_text),
+  'a1000000-0000-0000-0000-00000000000a'::uuid,
+  'Le message créé par A a pour sender_id l''identité de A, exactement'
+);
+
+-- 14c. B (participant) envoie à son tour un message texte dans la même
+--      conversation, juste après l'appel de A ci-dessus (changement de JWT
+--      entre deux appels successifs, comme deux requêtes HTTP consécutives
+--      sur le même processus serveur).
+set local "request.jwt.claim.sub" = 'b1000000-0000-0000-0000-00000000000b';
+set local "request.jwt.claims" = '{"sub":"b1000000-0000-0000-0000-00000000000b","role":"authenticated"}';
+
+create temporary table t_text_b as
+  select * from public.create_text_message((select id from t_conv), 'Reponse de B');
+
+select is(
+  (select sender_id from t_text_b),
+  'b1000000-0000-0000-0000-00000000000b'::uuid,
+  'Le message créé par B juste après A a pour sender_id l''identité de B, exactement (jamais celle de A)'
+);
+
+-- 14d. Retour à A : un troisième appel, avec un troisième changement de JWT,
+--      doit de nouveau résoudre l'identité de A — jamais celle du dernier
+--      appelant (B), jamais une valeur mélangée/mise en cache.
+set local "request.jwt.claim.sub" = 'a1000000-0000-0000-0000-00000000000a';
+set local "request.jwt.claims" = '{"sub":"a1000000-0000-0000-0000-00000000000a","role":"authenticated"}';
+
+create temporary table t_text_a2 as
+  select * from public.create_text_message((select id from t_conv), 'A confirme');
+
+select is(
+  (select sender_id from t_text_a2),
+  'a1000000-0000-0000-0000-00000000000a'::uuid,
+  'Un second message de A, après un appel de B entre-temps, a de nouveau pour sender_id l''identité de A'
+);
+
+-- 14e. Les trois messages, relus depuis la table dans leur ordre exact de
+--      création (les trois insertions partagent la même transaction de
+--      test, donc le même now() : created_at ne permet pas de les
+--      départager, on utilise donc directement l'ordre de création connu
+--      via les tables temporaires ci-dessus), montrent bien trois sender_id
+--      alternant A/B/A — jamais une valeur unique répétée pour les trois
+--      lignes (ce qui serait la signature exacte de l'anomalie observée en
+--      test manuel).
+select is(
+  array[
+    (select sender_id from public.messages where id = (select message_id from t_text)),
+    (select sender_id from public.messages where id = (select message_id from t_text_b)),
+    (select sender_id from public.messages where id = (select message_id from t_text_a2))
+  ],
+  array[
+    'a1000000-0000-0000-0000-00000000000a'::uuid,
+    'b1000000-0000-0000-0000-00000000000b'::uuid,
+    'a1000000-0000-0000-0000-00000000000a'::uuid
+  ],
+  'Les sender_id des trois messages successifs (A, B, A) alternent correctement, relus depuis la table'
 );
 
 -- ---------------------------------------------------------------------------

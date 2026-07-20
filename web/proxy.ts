@@ -5,12 +5,12 @@ import { getSessionAuthenticatorLevels, updateSession } from '@/lib/supabase/mid
 import { sanitizeRedirectPath } from '@/lib/redirect';
 
 const DEFAULT_PROTECTED_DESTINATION = '/membre';
-const PROTECTED_PREFIXES = ['/membre', '/profil', '/installation-privee'];
+const PROTECTED_PREFIXES = ['/membre', '/profil', '/installation-privee', '/conversations'];
 const AUTH_ONLY_WHEN_LOGGED_OUT = ['/login', '/inscription', '/forgot-password'];
 /** Étapes intermédiaires d'authentification : ni publiques, ni pleinement protégées — voir la section dédiée ci-dessous. */
 const MFA_CHALLENGE_PATH = '/verification-mfa';
 /** Jamais mis en cache par le navigateur ni le Service Worker (Phase 8.3, section 10) : sessions et étapes d'authentification uniquement. */
-const NEVER_CACHED_PATHS = [...PROTECTED_PREFIXES, MFA_CHALLENGE_PATH, '/reset-password'];
+const NEVER_CACHED_PATHS = [...PROTECTED_PREFIXES, MFA_CHALLENGE_PATH, '/reset-password', '/auth/callback', '/forgot-password'];
 
 /**
  * Protection d'accès côté serveur (jamais uniquement en JavaScript
@@ -67,7 +67,18 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (isAuthOnlyWhenLoggedOut && user) {
+  // Exception (Phase 8.4) : un lien de récupération de mot de passe expiré
+  // ou déjà utilisé redirige vers /forgot-password?reason=link_expired
+  // (voir app/auth/callback/route.ts) — ce message doit toujours s'afficher,
+  // même pour un visiteur déjà connecté (session active dans ce navigateur
+  // depuis un test précédent, par exemple). /membre ne doit jamais servir de
+  // repli silencieux pendant ce parcours précis : seul ce cas précis (path +
+  // reason) est exempté de la redirection "déjà connecté" ci-dessous,
+  // jamais /forgot-password dans son usage normal (qui continue de rediriger
+  // un visiteur déjà connecté vers /membre comme avant).
+  const isRecoveryErrorContext = pathname === '/forgot-password' && request.nextUrl.searchParams.get('reason') === 'link_expired';
+
+  if (isAuthOnlyWhenLoggedOut && user && !isRecoveryErrorContext) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = DEFAULT_PROTECTED_DESTINATION;
     redirectUrl.search = '';
