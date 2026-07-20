@@ -83,3 +83,12 @@ export const MEDIA_MAGIC_BYTES: Record<AllowedMimeType, readonly MagicByteSignat
  * mémoire pour ce contrôle (voir `media-server-validation.ts`).
  */
 export const MEDIA_HEADER_BYTES_REQUIRED = 16;
+
+/**
+ * Durée de validité d'une URL signée pour une pièce jointe privée (Phase
+ * 8.5.4) — valeur unique centralisée, jamais dupliquée ailleurs. Alignée sur
+ * le TTL par défaut déjà utilisé côté mobile (`DEFAULT_SIGNED_URL_TTL_SECONDS`,
+ * `src/services/media.ts`), pour une cohérence de comportement entre les deux
+ * plateformes.
+ */
+export const SIGNED_URL_TTL_SECONDS = 3600;

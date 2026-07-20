@@ -138,6 +138,15 @@ export async function getOrCreateConversation(targetUserId: string): Promise<str
   return data as string;
 }
 
+type AttachmentDbRow = {
+  id: string;
+  media_type: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+};
+
 type MessageDbRow = {
   id: string;
   conversation_id: string;
@@ -145,10 +154,24 @@ type MessageDbRow = {
   content: string;
   message_type: string;
   created_at: string;
+  message_attachments: AttachmentDbRow[] | null;
 };
+
+/**
+ * Jointure `message_attachments` — **jamais `storage_path`** dans cette
+ * liste de colonnes : ce champ ne doit jamais quitter le serveur vers le
+ * client (voir la note sur `MessageAttachment` dans `conversations-types.ts`).
+ * Un ajout futur de colonne à ce SELECT doit systématiquement se demander si
+ * elle est sûre à exposer côté navigateur avant de l'ajouter.
+ */
+const MESSAGE_SELECT =
+  'id, conversation_id, sender_id, content, message_type, created_at, ' +
+  'message_attachments(id, media_type, mime_type, width, height, duration_ms)';
 
 function mapMessageRow(row: MessageDbRow): MessageRow {
   const messageType: MessageType = row.message_type === 'image' || row.message_type === 'video' ? row.message_type : 'text';
+  const attachmentRow = row.message_attachments?.[0] ?? null;
+
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -156,6 +179,17 @@ function mapMessageRow(row: MessageDbRow): MessageRow {
     content: row.content,
     messageType,
     createdAt: row.created_at,
+    attachment:
+      attachmentRow == null
+        ? null
+        : {
+            id: attachmentRow.id,
+            mediaType: attachmentRow.media_type === 'video' ? 'video' : 'image',
+            mimeType: attachmentRow.mime_type,
+            width: attachmentRow.width,
+            height: attachmentRow.height,
+            durationMs: attachmentRow.duration_ms,
+          },
   };
 }
 
@@ -171,7 +205,7 @@ export async function fetchMessagesPage(conversationId: string, before?: string)
   const supabase = await createClient();
   let query = supabase
     .from('messages')
-    .select('id, conversation_id, sender_id, content, message_type, created_at')
+    .select(MESSAGE_SELECT)
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: false })
     .limit(MESSAGES_PAGE_SIZE);
@@ -186,7 +220,29 @@ export async function fetchMessagesPage(conversationId: string, before?: string)
     throw new Error('Impossible de charger les messages pour le moment.');
   }
 
-  return ((data ?? []) as MessageDbRow[]).map(mapMessageRow).reverse();
+  return ((data ?? []) as unknown as MessageDbRow[]).map(mapMessageRow).reverse();
+}
+
+/**
+ * Recharge un message unique avec sa pièce jointe éventuelle — utilisé après
+ * un événement Realtime `INSERT` sur `messages`, dont la charge utile brute
+ * ne contient jamais la jointure `message_attachments` (jamais fait
+ * confiance pour l'affichage, voir `useMessages.ts`). Protégé par la même
+ * RLS que `fetchMessagesPage` : `null` pour un message inexistant ou hors
+ * des conversations de l'utilisateur courant, jamais distingué.
+ */
+export async function fetchMessageById(messageId: string): Promise<MessageRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('messages').select(MESSAGE_SELECT).eq('id', messageId).maybeSingle();
+
+  if (error) {
+    throw new Error('Impossible de charger le message pour le moment.');
+  }
+  if (!data) {
+    return null;
+  }
+
+  return mapMessageRow(data as unknown as MessageDbRow);
 }
 
 type CreateTextMessageRow = {
@@ -227,5 +283,6 @@ export async function sendTextMessage(conversationId: string, content: string): 
     content: row.content,
     messageType: 'text',
     createdAt: row.created_at,
+    attachment: null,
   };
 }

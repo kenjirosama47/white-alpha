@@ -27,6 +27,24 @@ export type MessageType = 'text' | 'image' | 'video';
 
 export type MessageStatus = 'sent' | 'pending' | 'failed';
 
+/**
+ * Métadonnées d'affichage d'une pièce jointe (Phase 8.5.4) — **jamais**
+ * `storagePath` : ce champ n'est jamais sélectionné côté serveur pour être
+ * envoyé au client (voir `lib/conversations.ts#mapMessageRow`), ni transmis
+ * par aucune réponse client. La résolution d'une URL affichable passe
+ * exclusivement par `getSignedAttachmentUrlAction(attachmentId)`
+ * (`app/conversations/[id]/actions.ts`), qui retrouve le chemin
+ * exclusivement côté serveur.
+ */
+export type MessageAttachment = {
+  id: string;
+  mediaType: 'image' | 'video';
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+};
+
 export type MessageRow = {
   id: string;
   conversationId: string;
@@ -34,6 +52,7 @@ export type MessageRow = {
   content: string;
   messageType: MessageType;
   createdAt: string;
+  attachment: MessageAttachment | null;
 };
 
 /** Message affiché côté client : `status` n'existe que pour un message envoyé pendant cette session (jamais pour un message chargé depuis le serveur ou reçu via Realtime, toujours `'sent'`). */

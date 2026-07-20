@@ -1,4 +1,5 @@
 import {
+  fetchMessageById,
   fetchMessagesPage,
   getConversationHeader,
   getOrCreateConversation,
@@ -159,6 +160,7 @@ describe('lib/conversations (Phase 8.4, couche de données serveur)', () => {
         content: 'Salut',
         messageType: 'text',
         createdAt: '2026-01-01T00:00:00Z',
+        attachment: null,
       });
     });
   });
@@ -171,8 +173,8 @@ describe('lib/conversations (Phase 8.4, couche de données serveur)', () => {
         order: jest.fn().mockReturnThis(),
         limit: jest.fn().mockResolvedValue({
           data: [
-            { id: 'm2', conversation_id: 'c1', sender_id: 'u1', content: 'Deux', message_type: 'text', created_at: '2026-01-01T00:02:00Z' },
-            { id: 'm1', conversation_id: 'c1', sender_id: 'u1', content: 'Un', message_type: 'text', created_at: '2026-01-01T00:01:00Z' },
+            { id: 'm2', conversation_id: 'c1', sender_id: 'u1', content: 'Deux', message_type: 'text', created_at: '2026-01-01T00:02:00Z', message_attachments: null },
+            { id: 'm1', conversation_id: 'c1', sender_id: 'u1', content: 'Un', message_type: 'text', created_at: '2026-01-01T00:01:00Z', message_attachments: null },
           ],
           error: null,
         }),
@@ -185,6 +187,95 @@ describe('lib/conversations (Phase 8.4, couche de données serveur)', () => {
       expect(from).toHaveBeenCalledWith('messages');
       expect(query.eq).toHaveBeenCalledWith('conversation_id', 'c1');
       expect(result.map((m) => m.id)).toEqual(['m1', 'm2']);
+    });
+
+    it('sélectionne la jointure message_attachments, jamais storage_path (colonne absente de la sélection)', async () => {
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+      };
+      const from = jest.fn().mockReturnValue(query);
+      mockCreateClient.mockResolvedValue({ from });
+
+      await fetchMessagesPage('c1');
+
+      const selectArg = query.select.mock.calls[0]?.[0] as string;
+      expect(selectArg).toContain('message_attachments(');
+      expect(selectArg).not.toContain('storage_path');
+    });
+
+    it('mappe une pièce jointe image : media_type/mime_type/dimensions, jamais storagePath', async () => {
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        order: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({
+          data: [
+            {
+              id: 'm1',
+              conversation_id: 'c1',
+              sender_id: 'u1',
+              content: '',
+              message_type: 'image',
+              created_at: '2026-01-01T00:00:00Z',
+              message_attachments: [{ id: 'a1', media_type: 'image', mime_type: 'image/jpeg', width: 800, height: 600, duration_ms: null }],
+            },
+          ],
+          error: null,
+        }),
+      };
+      const from = jest.fn().mockReturnValue(query);
+      mockCreateClient.mockResolvedValue({ from });
+
+      const result = await fetchMessagesPage('c1');
+
+      expect(result[0]?.attachment).toEqual({ id: 'a1', mediaType: 'image', mimeType: 'image/jpeg', width: 800, height: 600, durationMs: null });
+      expect(JSON.stringify(result[0])).not.toContain('storage_path');
+    });
+  });
+
+  describe('fetchMessageById', () => {
+    it('renvoie le message avec sa pièce jointe (utilisé après un INSERT Realtime média)', async () => {
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest.fn().mockResolvedValue({
+          data: {
+            id: 'm1',
+            conversation_id: 'c1',
+            sender_id: 'u1',
+            content: '',
+            message_type: 'video',
+            created_at: '2026-01-01T00:00:00Z',
+            message_attachments: [{ id: 'a1', media_type: 'video', mime_type: 'video/mp4', width: 640, height: 480, duration_ms: 5000 }],
+          },
+          error: null,
+        }),
+      };
+      const from = jest.fn().mockReturnValue(query);
+      mockCreateClient.mockResolvedValue({ from });
+
+      const result = await fetchMessageById('m1');
+
+      expect(from).toHaveBeenCalledWith('messages');
+      expect(query.eq).toHaveBeenCalledWith('id', 'm1');
+      expect(result?.attachment).toEqual({ id: 'a1', mediaType: 'video', mimeType: 'video/mp4', width: 640, height: 480, durationMs: 5000 });
+    });
+
+    it('message inexistant ou hors des conversations de l’utilisateur (RLS) : renvoie null, jamais une erreur distinctive', async () => {
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const from = jest.fn().mockReturnValue(query);
+      mockCreateClient.mockResolvedValue({ from });
+
+      const result = await fetchMessageById('m-not-mine');
+
+      expect(result).toBeNull();
     });
   });
 });

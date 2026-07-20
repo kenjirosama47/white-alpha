@@ -265,4 +265,34 @@ describe('proxy.ts — protection de routes (Phase 8.3)', () => {
       expect(csp).toContain("'unsafe-eval'");
     },
   );
+
+  it("media-src (Phase 8.5.4) : 'self' et l'origine Supabase uniquement, jamais * ni blob:/data: ni domaine externe", async () => {
+    mockSession(null);
+
+    const response = await proxy(makeRequest('/'));
+    const csp = response.headers.get('Content-Security-Policy');
+
+    expect(csp).toContain("media-src 'self' https://example.supabase.co");
+    expect(csp).not.toMatch(/media-src[^;]*\*/);
+    expect(csp).not.toMatch(/media-src[^;]*blob:/);
+    expect(csp).not.toMatch(/media-src[^;]*data:/);
+  });
+
+  it('les autres directives CSP restent inchangées après l’ajout de media-src (Phase 8.5.4)', async () => {
+    mockSession(null);
+
+    const response = await proxy(makeRequest('/'));
+    const csp = response.headers.get('Content-Security-Policy');
+
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("strict-dynamic");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("img-src 'self' data: https://example.supabase.co");
+    expect(csp).toContain("font-src 'self'");
+    expect(csp).toContain("connect-src 'self' https://example.supabase.co wss://example.supabase.co");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("object-src 'none'");
+  });
 });

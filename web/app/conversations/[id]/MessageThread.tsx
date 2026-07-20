@@ -6,7 +6,9 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import type { ConversationHeader, MessageRow } from '@/lib/conversations-types';
 
 import { MessageComposer } from './MessageComposer';
+import { MessageImage } from './MessageImage';
 import styles from './MessageThread.module.css';
+import { MessageVideo } from './MessageVideo';
 import { useMessages } from './useMessages';
 
 type MessageThreadProps = {
@@ -126,11 +128,21 @@ export function MessageThread({ conversationId, header, initialMessages, current
               )}
               <div className={isOwn ? styles.bubbleRowOwn : styles.bubbleRowOther}>
                 <div className={isOwn ? styles.bubbleOwn : styles.bubbleOther}>
-                  {message.messageType === 'text' ? (
-                    <p className={styles.bubbleText}>{message.content}</p>
-                  ) : (
-                    <p className={styles.bubbleText}>Pièce jointe (disponible sur l’app mobile)</p>
-                  )}
+                  {message.attachment &&
+                    (message.attachment.mediaType === 'image' ? (
+                      <MessageImage
+                        attachmentId={message.attachment.id}
+                        width={message.attachment.width}
+                        height={message.attachment.height}
+                      />
+                    ) : (
+                      <MessageVideo
+                        attachmentId={message.attachment.id}
+                        width={message.attachment.width}
+                        height={message.attachment.height}
+                      />
+                    ))}
+                  {message.content.length > 0 && <p className={styles.bubbleText}>{message.content}</p>}
                   <div className={styles.bubbleMeta}>
                     <span className={styles.bubbleTime}>{formatTime(message.createdAt)}</span>
                     {message.status === 'pending' && <span className={styles.bubbleStatus}>Envoi…</span>}

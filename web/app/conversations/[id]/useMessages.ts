@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { normalizeMessageContent, validateMessageContent } from '@/lib/validation';
 
-import { getRealtimeCredentialsAction, sendMessageAction } from './actions';
+import { fetchMessageByIdAction, getRealtimeCredentialsAction, sendMessageAction } from './actions';
 
 type RealtimeMessagePayload = {
   id: string;
@@ -20,6 +20,7 @@ type RealtimeMessagePayload = {
   created_at: string;
 };
 
+/** Ligne brute `postgres_changes` — ne contient jamais la jointure `message_attachments` : `attachment` est toujours `null` ici, jamais une supposition. Utilisée pour un message texte reçu en Realtime ; un message média est entièrement rechargé via `fetchMessageByIdAction` (voir l'abonnement `INSERT` plus bas), jamais construit depuis ce seul payload. */
 function toMessageRow(row: RealtimeMessagePayload): MessageRow {
   const messageType = row.message_type === 'image' || row.message_type === 'video' ? row.message_type : 'text';
   return {
@@ -29,11 +30,53 @@ function toMessageRow(row: RealtimeMessagePayload): MessageRow {
     content: row.content,
     messageType,
     createdAt: row.created_at,
+    attachment: null,
+  };
+}
+
+type PaginationAttachmentRow = {
+  id: string;
+  media_type: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+};
+
+type PaginationMessageRow = RealtimeMessagePayload & { message_attachments: PaginationAttachmentRow[] | null };
+
+/** Utilisée uniquement pour `loadMore` (historique), dont la requête inclut la jointure `message_attachments` — jamais `storage_path` dans cette sélection (voir la requête plus bas) : ce champ ne doit jamais atteindre le navigateur, y compris via ce client Realtime éphémère. */
+function toMessageRowWithAttachment(row: PaginationMessageRow): MessageRow {
+  const base = toMessageRow(row);
+  const attachmentRow = row.message_attachments?.[0] ?? null;
+  if (!attachmentRow) return base;
+
+  return {
+    ...base,
+    attachment: {
+      id: attachmentRow.id,
+      mediaType: attachmentRow.media_type === 'video' ? 'video' : 'image',
+      mimeType: attachmentRow.mime_type,
+      width: attachmentRow.width,
+      height: attachmentRow.height,
+      durationMs: attachmentRow.duration_ms,
+    },
   };
 }
 
 function byCreatedAt(a: DisplayMessage, b: DisplayMessage): number {
   return a.createdAt.localeCompare(b.createdAt);
+}
+
+/** Fusion anti-doublon partagée (Realtime texte, Realtime média rechargé) : un message déjà présent (hors état `pending`) n'est jamais dupliqué ; un écho optimiste local (`pending`, même expéditeur/contenu) est remplacé plutôt qu'accumulé. */
+function mergeIncomingMessage(current: DisplayMessage[], row: MessageRow): DisplayMessage[] {
+  if (current.some((message) => message.status !== 'pending' && message.id === row.id)) {
+    return current;
+  }
+  const withoutPending = current.filter(
+    (message) => !(message.status === 'pending' && message.senderId === row.senderId && message.content === row.content),
+  );
+  return [...withoutPending, { ...row, status: 'sent' as const }].sort(byCreatedAt);
 }
 
 let tempIdCounter = 0;
@@ -111,16 +154,28 @@ export function useMessages(conversationId: string, initialMessages: MessageRow[
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
             (payload) => {
-              const row = toMessageRow(payload.new as RealtimeMessagePayload);
-              setMessages((current) => {
-                if (current.some((message) => message.status !== 'pending' && message.id === row.id)) {
-                  return current;
-                }
-                const withoutPending = current.filter(
-                  (message) => !(message.status === 'pending' && message.senderId === row.senderId && message.content === row.content),
-                );
-                return [...withoutPending, { ...row, status: 'sent' as const }].sort(byCreatedAt);
-              });
+              const raw = payload.new as RealtimeMessagePayload;
+
+              if (raw.message_type !== 'image' && raw.message_type !== 'video') {
+                setMessages((current) => mergeIncomingMessage(current, toMessageRow(raw)));
+                return;
+              }
+
+              // Message média : le payload postgres_changes ne contient
+              // jamais la jointure message_attachments — jamais construire
+              // l'affichage à partir de ce seul payload, toujours recharger
+              // le message complet (avec sa pièce jointe) côté serveur.
+              fetchMessageByIdAction(raw.id)
+                .then((full) => {
+                  if (cancelled || !full) return;
+                  setMessages((current) => mergeIncomingMessage(current, full));
+                })
+                .catch(() => {
+                  // Échec de rechargement (réseau, session) : le message
+                  // reste absent du fil tant qu'un prochain chargement ne le
+                  // récupère pas, jamais un affichage partiel/faux construit
+                  // depuis le payload brut.
+                });
             },
           )
           .on(
@@ -159,9 +214,14 @@ export function useMessages(conversationId: string, initialMessages: MessageRow[
     setIsLoadingMore(true);
 
     async function run(activeClient: NonNullable<typeof client>, before: string) {
+      // Jointure message_attachments, mais jamais storage_path (voir
+      // toMessageRowWithAttachment) : ce client Realtime éphémère répond
+      // directement au navigateur, donc toute colonne sélectionnée ici y
+      // est visible telle quelle — les mêmes règles que côté serveur
+      // s'appliquent.
       const { data, error } = await activeClient
         .from('messages')
-        .select('id, conversation_id, sender_id, content, message_type, created_at')
+        .select('id, conversation_id, sender_id, content, message_type, created_at, message_attachments(id, media_type, mime_type, width, height, duration_ms)')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .limit(MESSAGES_PAGE_SIZE)
@@ -171,7 +231,7 @@ export function useMessages(conversationId: string, initialMessages: MessageRow[
         setHasMore(false);
         return;
       }
-      const older = (data as RealtimeMessagePayload[]).map(toMessageRow).reverse();
+      const older = (data as unknown as PaginationMessageRow[]).map(toMessageRowWithAttachment).reverse();
       setMessages((current) => {
         const byId = new Map(current.map((message) => [message.id, message]));
         for (const message of older) {
@@ -215,6 +275,7 @@ export function useMessages(conversationId: string, initialMessages: MessageRow[
         content: normalized,
         messageType: 'text',
         createdAt: new Date().toISOString(),
+        attachment: null,
         status: 'pending',
       };
 

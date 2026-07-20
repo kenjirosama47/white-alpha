@@ -151,6 +151,40 @@ describe('web/ — audit statique de sécurité (Phase 8.4, conversations)', () 
   });
 });
 
+describe('web/ — audit statique de sécurité (Phase 8.5.4, pièces jointes)', () => {
+  it('aucun chemin Storage ni URL signée journalisés via console.*', () => {
+    const offenders = sourceFiles.filter((file) => {
+      const content = readFileSync(file, 'utf8');
+      return /console\.\w+\([^)]*\b(storagePath|storage_path|signedUrl|signed_url)\b/i.test(content);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('lib/conversations-types.ts (types partagés avec le client) ne déclare jamais de champ storagePath', () => {
+    // Recherche la déclaration de champ elle-même (`storagePath:`, sans
+    // espace avant le deux-points, syntaxe TypeScript), jamais la simple
+    // mention du mot — ce fichier l'explique justement dans un commentaire
+    // ("jamais `storagePath` : ce champ..."), qui utilise l'espace avant
+    // ':' propre à la typographie française, jamais une déclaration de champ.
+    const content = readFileSync(path.join(ROOT, 'lib', 'conversations-types.ts'), 'utf8');
+
+    expect(content).not.toMatch(/storagePath\??:/);
+  });
+
+  it('aucune utilisation de sessionStorage dans le code source web/', () => {
+    const offenders = sourceFiles.filter((file) => readFileSync(file, 'utf8').includes('sessionStorage'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('aucune utilisation de Cache Storage (caches.open/match/put) en dehors du Service Worker (public/sw.js, non scanné ici — extension .js)', () => {
+    const offenders = sourceFiles.filter((file) => /caches\s*\.\s*(open|match|put)/.test(readFileSync(file, 'utf8')));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('public/sw.js — audit statique du Service Worker (Phase 8.2)', () => {
   const swContent = readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
 

@@ -135,6 +135,12 @@ function applySecurityHeaders(response: NextResponse, nonce: string): void {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${scriptSrcEval}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: ${supabaseOrigin}`,
+    // media-src (Phase 8.5.4) : uniquement l'origine Supabase déjà autorisée
+    // ailleurs (img-src/connect-src) — nécessaire pour lire une vidéo depuis
+    // une URL signée Supabase Storage (origine externe, jamais couverte par
+    // `default-src 'self'` seul). Ni `*`, ni `blob:`/`data:` (jamais généré
+    // pour un média distant), ni domaine externe supplémentaire.
+    `media-src 'self' ${supabaseOrigin}`,
     `font-src 'self'`,
     // connect-src : uniquement le projet Supabase (API REST + Realtime
     // WebSocket, ce dernier pas encore utilisé dans cette fondation mais

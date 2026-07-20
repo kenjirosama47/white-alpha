@@ -1,6 +1,7 @@
 'use server';
 
-import { sendTextMessage, type MessageRow } from '@/lib/conversations';
+import { fetchMessageById, sendTextMessage, type MessageRow } from '@/lib/conversations';
+import { SIGNED_URL_TTL_SECONDS } from '@/lib/media-config';
 import { createClient } from '@/lib/supabase/server';
 import { normalizeMessageContent, validateMessageContent } from '@/lib/validation';
 
@@ -56,4 +57,53 @@ export async function getRealtimeCredentialsAction(): Promise<RealtimeCredential
     accessToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
   };
+}
+
+/**
+ * Recharge un message complet (avec sa pièce jointe éventuelle) après un
+ * événement Realtime `INSERT` — le payload brut `postgres_changes` ne
+ * contient jamais la jointure `message_attachments`, jamais utilisé seul
+ * pour l'affichage d'un message média (Phase 8.5.4). `null` en cas d'échec
+ * ou d'absence (message supprimé entre-temps, accès refusé) : jamais
+ * distingué, jamais bloquant pour le reste du fil déjà affiché.
+ */
+export async function fetchMessageByIdAction(messageId: string): Promise<MessageRow | null> {
+  try {
+    return await fetchMessageById(messageId);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Résout une URL signée temporaire pour une pièce jointe (Phase 8.5.4).
+ * Entrée : uniquement `attachmentId` — **jamais un `storagePath` transmis
+ * par le navigateur**, celui-ci n'est ni sélectionné ni renvoyé par aucune
+ * autre action/fonction serveur (voir la note sur `message_attachments`
+ * dans `conversations-types.ts`). Le chemin réel est retrouvé ici, côté
+ * serveur uniquement, via un SELECT protégé par la policy RLS existante "Un
+ * participant peut voir les pièces jointes" (Phase 4A) — aucune vérification
+ * d'appartenance supplémentaire nécessaire : une ligne inexistante ou hors
+ * des conversations de l'utilisateur courant produit le même `null`, jamais
+ * distingué (anti-énumération). `createSignedUrl` utilise le client serveur
+ * authentifié par la session cookie (jamais `service_role`). Ne renvoie
+ * jamais le détail brut d'une erreur Supabase — uniquement `null` en cas
+ * d'échec, jamais journalisé avec l'URL ou le chemin.
+ */
+export async function getSignedAttachmentUrlAction(attachmentId: string): Promise<string | null> {
+  const supabase = await createClient();
+
+  const { data: attachment } = await supabase
+    .from('message_attachments')
+    .select('storage_path')
+    .eq('id', attachmentId)
+    .maybeSingle();
+
+  if (!attachment) return null;
+
+  const { data, error } = await supabase.storage.from('chat-media').createSignedUrl(attachment.storage_path, SIGNED_URL_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) return null;
+
+  return data.signedUrl;
 }
