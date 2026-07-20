@@ -23,6 +23,20 @@ const NEVER_CACHED_PATHS = [...PROTECTED_PREFIXES, MFA_CHALLENGE_PATH, '/reset-p
  * actif (ou l'ayant désactivé) est protégé exactement de la même façon.
  */
 export async function proxy(request: NextRequest) {
+  // Le nonce doit être posé sur `request.headers` AVANT tout appel à
+  // `NextResponse.next({ request })` (fait par `updateSession` juste en
+  // dessous) : Next.js fige l'état de ces en-têtes au moment de cet appel
+  // pour les transmettre à son moteur de rendu (mécanisme interne
+  // `x-middleware-override-headers`), qui s'en sert pour appliquer
+  // automatiquement le nonce à ses propres <script> générés (bootstrap,
+  // chunks). Le poser plus tard (ex. dans `applySecurityHeaders`, une fois
+  // `response` déjà construite) n'a aucun effet : Next.js ne reçoit jamais
+  // le nonce, ses scripts sont alors émis sans attribut `nonce`, et
+  // `strict-dynamic` (CSP ci-dessous) les bloque — cause du blocage CSP
+  // observé sur `_next/static/chunks/...`.
+  const nonce = generateNonce();
+  request.headers.set('x-nonce', nonce);
+
   const { response, user, hadExpiredSession, supabase } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
@@ -89,19 +103,21 @@ export async function proxy(request: NextRequest) {
     response.headers.set('Cache-Control', 'no-store');
   }
 
-  applySecurityHeaders(response, request);
+  applySecurityHeaders(response, nonce);
   return response;
 }
 
+/** Un nonce base64 aléatoire par requête (recette officielle Next.js pour l'App Router) — jamais statique/réutilisé, sans quoi un attaquant capable d'injecter du HTML pourrait réutiliser ce même nonce connu à l'avance. */
+function generateNonce(): string {
+  return Buffer.from(crypto.randomUUID()).toString('base64');
+}
+
 /**
- * CSP avec nonce généré à chaque requête (recette officielle Next.js pour
- * l'App Router) : un nonce statique/réutilisé n'apporterait aucune
- * protection réelle contre l'injection de script (XSS), puisqu'un
- * attaquant capable d'injecter du HTML pourrait alors réutiliser ce même
- * nonce connu à l'avance.
+ * CSP avec nonce (généré par l'appelant, voir `proxy()` ci-dessus — jamais
+ * régénéré ici, sous peine de ne plus correspondre au nonce déjà transmis
+ * à Next.js via `request.headers`).
  */
-function applySecurityHeaders(response: NextResponse, request: NextRequest): void {
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+function applySecurityHeaders(response: NextResponse, nonce: string): void {
   const supabaseOrigin = new URL(SUPABASE_URL).origin;
   const supabaseWebSocketOrigin = supabaseOrigin.replace('https://', 'wss://');
   // `unsafe-eval` uniquement en développement (`next dev`) : React et les
@@ -131,8 +147,6 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest): voi
     `object-src 'none'`,
   ].join('; ');
 
-  request.headers.set('x-nonce', nonce);
-  response.headers.set('x-nonce', nonce);
   response.headers.set('Content-Security-Policy', csp);
 }
 

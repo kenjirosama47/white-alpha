@@ -23,7 +23,8 @@ const PRECACHE_URLS = ['/offline', '/manifest.webmanifest', '/icons/icon-192.png
 // ci-dessous — zone authentifiée (Phase 8.3 : /membre, /profil,
 // /installation-privee ; Phase 8.4 : /conversations, messages privés),
 // étapes d'authentification sensibles (/verification-mfa,
-// /reset-password) et formulaires d'identifiants.
+// /reset-password, /auth/callback — lien à usage unique) et formulaires
+// d'identifiants.
 const NEVER_CACHE_PATH_PREFIXES = [
   '/membre',
   '/profil',
@@ -34,6 +35,7 @@ const NEVER_CACHE_PATH_PREFIXES = [
   '/login',
   '/inscription',
   '/forgot-password',
+  '/auth/callback',
 ];
 
 self.addEventListener('install', (event) => {
