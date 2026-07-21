@@ -43,7 +43,7 @@ export function Button({
 
   const variantStyle: StyleProp<ViewStyle> =
     variant === 'primary'
-      ? { backgroundColor: theme.accent, borderWidth: 0 }
+      ? { backgroundColor: theme.buttonColor, borderWidth: 0 }
       : variant === 'secondary'
         ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.border }
         : variant === 'danger'

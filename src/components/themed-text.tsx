@@ -47,7 +47,17 @@ export function ThemedText({ style, type = 'default', themeColor, maxFontSizeMul
         type === 'link' && styles.link,
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
-        newVariant && { fontFamily: newVariant.fontFamily, fontSize: newVariant.fontSize, lineHeight: newVariant.lineHeight },
+        newVariant && {
+          fontFamily: newVariant.fontFamily,
+          // `textScale` (Phase 10.2) ne s'applique qu'aux nouvelles variantes
+          // `Typography` : les types hérités (`default`, `title`, `small`...)
+          // restent volontairement figés à leur taille d'origine (voir
+          // commentaire de `ThemedTextProps` ci-dessus). `theme.textScale`
+          // vaut 1 par défaut : aucun changement tant qu'aucune préférence
+          // n'a été personnalisée.
+          fontSize: newVariant.fontSize * theme.textScale,
+          lineHeight: newVariant.lineHeight * theme.textScale,
+        },
         style,
       ]}
       {...rest}

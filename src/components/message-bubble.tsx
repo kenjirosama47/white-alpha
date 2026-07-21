@@ -62,7 +62,9 @@ export function MessageBubble({
         <View
           style={[
             styles.bubble,
-            isOwnMessage ? { backgroundColor: theme.accent } : { backgroundColor: theme.surfaceHigh, borderWidth: 1, borderColor: theme.border },
+            isOwnMessage
+              ? { backgroundColor: theme.bubbleSentColor }
+              : { backgroundColor: theme.bubbleReceivedColor, borderWidth: 1, borderColor: theme.border },
           ]}>
           {message.attachment?.mediaType === 'image' && (
             <MessageImage

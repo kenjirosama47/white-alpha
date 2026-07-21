@@ -18,6 +18,7 @@ import { Platform, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { OfflineBanner } from '@/components/offline-banner';
+import { AppearanceProvider, useAppearanceContext } from '@/contexts/appearance-context';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { useNotificationResponseNavigation } from '@/hooks/use-notification-response';
 import { configureNotificationHandler } from '@/lib/push-notifications';
@@ -46,6 +47,13 @@ configureNotificationHandler();
 
 function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
+  // Préférences d'apparence locales (Phase 10.2) : incluses dans le gate du
+  // splash ci-dessous pour la même raison que la session/les polices —
+  // éviter tout flash visuel (un compte ayant déjà personnalisé son thème ne
+  // doit jamais voir un rendu par défaut avant que ses préférences ne soient
+  // lues). Sans effet perceptible tant qu'aucune préférence non par défaut
+  // n'existe encore (aucun écran ne permet de la modifier à ce stade).
+  const { isLoading: isAppearanceLoading } = useAppearanceContext();
   // `fontError` fait volontairement partie du gate de disponibilité (pas
   // seulement `fontsLoaded`) : un échec de chargement ne doit jamais bloquer
   // indéfiniment le splash, l'app démarre alors avec le repli système
@@ -75,10 +83,11 @@ function RootNavigator() {
 
   // Tant que la session n'a pas été restaurée, le splash natif reste affiché
   // (voir AnimatedSplashOverlay) : la Stack ci-dessous ne devient visible
-  // qu'une fois isLoading passé à false.
+  // qu'une fois isLoading (session) et isAppearanceLoading (préférences
+  // locales) passés à false.
   return (
     <>
-      <AnimatedSplashOverlay ready={!isLoading && fontsReady} />
+      <AnimatedSplashOverlay ready={!isLoading && !isAppearanceLoading && fontsReady} />
       {/* Un seul abonnement réseau pour toute l'application (pas un par
           écran) : monté ici, jamais dans (app)/(auth). */}
       <OfflineBanner />
@@ -107,9 +116,11 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+      <AppearanceProvider>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </AppearanceProvider>
     </ThemeProvider>
   );
 }

@@ -16,6 +16,20 @@ jest.mock('@react-native-community/netinfo', () => ({
   },
 }));
 
+// Mock global : le module natif @react-native-async-storage/async-storage
+// n'existe pas dans l'environnement de test et plante sinon dès qu'un
+// composant/hook important une chaîne qui l'utilise est rendu (Phase 10.2 —
+// use-theme.ts en dépend désormais transitivement via appearance-context.tsx,
+// donc quasiment tout composant du design system). Mock officiel fourni par
+// la bibliothèque elle-même (in-memory, comportement réel de lecture/
+// écriture) — les tests qui ont besoin de simuler un échec ou un contenu
+// précis surchargent via `jest.mock(...)` dans leur propre fichier (ex.
+// push-notifications.test.ts, appearance-storage.test.ts), qui reste
+// prioritaire sur ce mock global pour ces fichiers.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 // Mock global minimal de react-native-reanimated (Phase 7.3) : le module
 // réel — et même son propre mock officiel (`react-native-reanimated/mock`)
 // — plante au chargement dans cet environnement Jest (aucun binding natif

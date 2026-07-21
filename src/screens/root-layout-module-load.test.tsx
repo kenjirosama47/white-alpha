@@ -35,6 +35,15 @@ jest.mock('@/contexts/auth-context', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({ isAuthenticated: false, isLoading: true }),
 }));
+// Isolation identique à AuthProvider/useAuth ci-dessus (Phase 10.2) : évite
+// tout accès réel à AsyncStorage via la chaîne appearance-context ->
+// use-appearance-preferences -> appearance-storage — ce test ne porte que
+// sur l'appel module-level à ScreenCapture, jamais rendu (voir commentaire
+// de tête de fichier).
+jest.mock('@/contexts/appearance-context', () => ({
+  AppearanceProvider: ({ children }: { children: React.ReactNode }) => children,
+  useAppearanceContext: () => ({ isLoading: true }),
+}));
 jest.mock('expo-router', () => ({
   ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
   DarkTheme: {},
