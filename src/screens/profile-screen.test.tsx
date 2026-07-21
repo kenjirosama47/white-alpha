@@ -137,6 +137,15 @@ describe('ProfileScreen', () => {
     expect(router.push).toHaveBeenCalledWith('/notifications');
   });
 
+  it('le lien Apparence ouvre l’écran de personnalisation visuelle', async () => {
+    mockUseMyProfile.mockReturnValue(baseProfileState());
+
+    await render(<ProfileScreen />);
+    fireEvent.press(screen.getByText('Apparence'));
+
+    expect(router.push).toHaveBeenCalledWith('/appearance');
+  });
+
   it('le bouton « Choisir un avatar » ouvre la galerie de sélection', async () => {
     mockUseMyProfile.mockReturnValue(baseProfileState());
 

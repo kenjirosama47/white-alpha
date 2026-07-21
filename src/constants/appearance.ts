@@ -56,3 +56,42 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   },
   avatarPreset: DEFAULT_WOLF_AVATAR_ID,
 };
+
+/**
+ * Palette de couleurs prédéfinies (Phase 10.3, écran Apparence) : teintes
+ * originales composées pour l'identité sombre/naturelle/premium de White
+ * Alpha (voir `constants/theme.ts`), aucune reprise d'un visuel ou d'une
+ * palette tierce. Utilisée telle quelle pour les 4 réglages de couleur
+ * (principale, boutons, bulles envoyées, bulles reçues) — un simple choix
+ * parmi des teintes prédéfinies, jamais un sélecteur de couleur libre (pas
+ * de nouvelle dépendance nécessaire).
+ */
+export const APPEARANCE_COLOR_PRESETS = [
+  { id: 'forest', label: 'Vert forêt', hex: Colors.dark.accent },
+  { id: 'moss', label: 'Vert mousse', hex: '#4B7F52' },
+  { id: 'teal', label: 'Bleu sarcelle', hex: '#2C6E7A' },
+  { id: 'slate_blue', label: 'Bleu ardoise', hex: '#3B5B7A' },
+  { id: 'amber', label: 'Ambre', hex: '#B08A3E' },
+  { id: 'copper', label: 'Cuivre', hex: '#A05A3B' },
+  { id: 'wine', label: 'Lie-de-vin', hex: '#7A3B4E' },
+  { id: 'graphite', label: 'Graphite', hex: '#4A4D46' },
+] as const satisfies readonly { id: string; label: string; hex: string }[];
+
+/**
+ * Paliers discrets de taille de texte (Phase 10.3) : un sélecteur à choix
+ * fixes plutôt qu'un curseur continu (pas de nouvelle dépendance de type
+ * "slider" nécessaire), bornés par `APPEARANCE_LIMITS.textScale`.
+ */
+export const TEXT_SCALE_STEPS = [
+  { label: 'Petit', value: APPEARANCE_LIMITS.textScale.min },
+  { label: 'Normal', value: 1 },
+  { label: 'Grand', value: 1.15 },
+  { label: 'Très grand', value: APPEARANCE_LIMITS.textScale.max },
+] as const satisfies readonly { label: string; value: number }[];
+
+/** Options du sélecteur de thème (Phase 10.3) — reprend `ThemeMode` tel quel. */
+export const THEME_MODE_OPTIONS = [
+  { value: 'system', label: 'Système' },
+  { value: 'light', label: 'Clair' },
+  { value: 'dark', label: 'Sombre' },
+] as const satisfies readonly { value: AppearancePreferences['themeMode']; label: string }[];

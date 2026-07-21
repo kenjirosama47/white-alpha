@@ -17,6 +17,7 @@ export default function AppLayout() {
         <Stack.Screen name="profile" />
         <Stack.Screen name="avatar-gallery" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="appearance" />
         <Stack.Screen name="conversation/[id]" />
       </Stack>
     </MyProfileProvider>

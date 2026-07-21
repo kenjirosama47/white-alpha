@@ -136,6 +136,7 @@ function ProfileView({ profile, onEdit }: ProfileViewProps) {
 
         <Button label="Sécurité du compte" onPress={() => router.push('/security')} variant="ghost" size="small" />
         <Button label="Notifications" onPress={() => router.push('/notifications')} variant="ghost" size="small" />
+        <Button label="Apparence" onPress={() => router.push('/appearance')} variant="ghost" size="small" />
 
         {typeof Constants.expoConfig?.version === 'string' && (
           <>
