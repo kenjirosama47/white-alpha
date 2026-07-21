@@ -5,12 +5,30 @@ import { useState, type PropsWithChildren } from 'react';
 import AppearanceScreen from '@/app/(app)/appearance';
 import { DEFAULT_APPEARANCE_PREFERENCES } from '@/constants/appearance';
 import { Colors } from '@/constants/theme';
+import { DECORATION_CATEGORIES, getDecorationsByCategory, resolveDecorationSource } from '@/constants/decorations';
 import { AppearanceContext, type AppearanceContextValue } from '@/contexts/appearance-context';
 import type { AppearancePreferences } from '@/types/appearance';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
 }));
+
+// `resolveDecorationSource`/`getDecorationsByCategory` restent le VRAI
+// catalogue par défaut (jest.fn() enveloppant l'implémentation réelle) :
+// seuls 2 tests ci-dessous ("ressource absente", "état vide propre")
+// substituent temporairement leur valeur de retour, puis la restaurent
+// explicitement en fin de test — jamais `jest.resetModules()` (romprait le
+// dispatcher de hooks React partagé par les autres tests de ce fichier, voir
+// le commentaire de root-layout-module-load.test.tsx).
+const actualDecorations = jest.requireActual('@/constants/decorations');
+jest.mock('@/constants/decorations', () => {
+  const actual = jest.requireActual('@/constants/decorations');
+  return {
+    ...actual,
+    resolveDecorationSource: jest.fn(actual.resolveDecorationSource),
+    getDecorationsByCategory: jest.fn(actual.getDecorationsByCategory),
+  };
+});
 
 function flattenStyle(style: unknown): Record<string, unknown> {
   return ([style] as unknown[])
@@ -69,7 +87,11 @@ describe('AppearanceScreen — ouverture et chargement', () => {
     );
 
     expect(screen.getByText('Apparence')).toBeTruthy();
-    expect(screen.getByLabelText("Aperçu de l'apparence : thème, couleurs des bulles et du bouton")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Aperçu de l'apparence pour accueil : thème, fond d'écran, couleurs des bulles et du bouton"),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Section à personnaliser')).toBeTruthy();
+    expect(screen.getByLabelText('Catégories de décorations')).toBeTruthy();
     expect(screen.getByLabelText('Thème clair ou sombre')).toBeTruthy();
     expect(screen.getByLabelText('Taille du texte')).toBeTruthy();
     expect(screen.getByText('Couleur principale')).toBeTruthy();
@@ -116,15 +138,16 @@ describe('AppearanceScreen — aperçu en temps réel', () => {
       await Promise.resolve();
     });
 
-    const phone = screen.getByText('White Alpha').parent;
-    expect(flattenStyle(phone?.props.style).backgroundColor).toBe(Colors.dark.background);
+    expect(flattenStyle(screen.getByTestId('appearance-preview-background').props.style).backgroundColor).toBe(
+      Colors.dark.background,
+    );
 
     await act(async () => {
       fireEvent.press(screen.getByLabelText('Clair'));
       await Promise.resolve();
     });
 
-    expect(flattenStyle(screen.getByText('White Alpha').parent?.props.style).backgroundColor).toBe(
+    expect(flattenStyle(screen.getByTestId('appearance-preview-background').props.style).backgroundColor).toBe(
       Colors.light.background,
     );
   });
@@ -146,6 +169,212 @@ describe('AppearanceScreen — aperçu en temps réel', () => {
 
     const sentBubble = screen.getByText('Oui, et toi ?').parent;
     expect(flattenStyle(sentBubble?.props.style).backgroundColor).toBe('#3B5B7A');
+  });
+});
+
+describe('AppearanceScreen — galerie de décorations (Phase 10.4)', () => {
+  it('affichage des catégories : les 8 catégories sont affichées, navigables par onglets', async () => {
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    for (const category of DECORATION_CATEGORIES) {
+      expect(screen.getByLabelText(category.label).props.accessibilityRole).toBe('tab');
+    }
+  });
+
+  it('affichage des miniatures : la catégorie active affiche ses fonds avec un libellé accessible', async () => {
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    // Catégorie active par défaut : la première (« White Alpha »).
+    for (const entry of getDecorationsByCategory(DECORATION_CATEGORIES[0].id)) {
+      expect(screen.getByLabelText(entry.label)).toBeTruthy();
+    }
+  });
+
+  it('sélection d’un fond : appuyer sur une miniature appelle updatePreferences avec le fond choisi pour la section active', async () => {
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    const [firstDecoration] = getDecorationsByCategory(DECORATION_CATEGORIES[0].id);
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(firstDecoration.label));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'catalog', decorationId: firstDecoration.id },
+      },
+    });
+  });
+
+  it('persistance locale : conserve les fonds déjà choisis sur les autres sections (fusion, pas d’écrasement)', async () => {
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        conversation: { kind: 'catalog', decorationId: 'night_sky_moon' },
+      },
+    };
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences, updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    const [firstDecoration] = getDecorationsByCategory(DECORATION_CATEGORIES[0].id);
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(firstDecoration.label));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      backgrounds: expect.objectContaining({
+        conversation: { kind: 'catalog', decorationId: 'night_sky_moon' },
+        home: { kind: 'catalog', decorationId: firstDecoration.id },
+      }),
+    });
+  });
+
+  it('application séparée par section : changer de section affiche/édite un fond indépendant (aperçu en temps réel)', async () => {
+    await render(
+      <TestAppearanceProvider>
+        <AppearanceScreen />
+      </TestAppearanceProvider>,
+    );
+
+    const [firstDecoration] = getDecorationsByCategory(DECORATION_CATEGORIES[0].id);
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(firstDecoration.label));
+      await Promise.resolve();
+    });
+
+    // Fond appliqué à « Accueil » : l’aperçu (toujours sur « Accueil » par
+    // défaut) passe d’une couleur unie à une image de fond.
+    expect(screen.getByTestId('appearance-preview-background').props.source).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Profil'));
+      await Promise.resolve();
+    });
+
+    // Bascule sur « Profil » : aucun fond choisi pour cette section, aucune
+    // miniature n’y est marquée sélectionnée (indépendance des 2 sections).
+    expect(screen.getByLabelText(firstDecoration.label).props.accessibilityState).toEqual(
+      expect.objectContaining({ selected: false }),
+    );
+    expect(screen.getByTestId('appearance-preview-background').props.source).toBeFalsy();
+  });
+
+  it('reset vers le fond par défaut : le bouton dédié restaure « default » pour la section active uniquement', async () => {
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        home: { kind: 'catalog', decorationId: 'white_alpha_glow' },
+        conversation: { kind: 'catalog', decorationId: 'night_sky_moon' },
+        profile: { kind: 'default' },
+      },
+    };
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences, updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Revenir au fond par défaut pour accueil'));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      backgrounds: {
+        home: { kind: 'default' },
+        conversation: { kind: 'catalog', decorationId: 'night_sky_moon' },
+        profile: { kind: 'default' },
+      },
+    });
+  });
+
+  it('identifiant de fond invalide : ne fait planter ni la galerie ni l’aperçu, aucune miniature marquée sélectionnée', async () => {
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'catalog', decorationId: 'fond-invente-qui-nexiste-pas' },
+      },
+    };
+
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    for (const entry of getDecorationsByCategory(DECORATION_CATEGORIES[0].id)) {
+      expect(screen.getByLabelText(entry.label).props.accessibilityState).toEqual(
+        expect.objectContaining({ selected: false }),
+      );
+    }
+    // Aucune source résolue pour un identifiant inconnu : repli sur la couleur unie, jamais une erreur.
+    expect(screen.getByTestId('appearance-preview-background').props.source).toBeFalsy();
+  });
+
+  it('ressource absente : la vignette retombe sur son libellé (repli neutre), jamais une erreur de bundling', async () => {
+    (resolveDecorationSource as jest.Mock).mockReturnValue(null);
+
+    try {
+      await render(
+        <AppearanceContext.Provider value={staticContextValue()}>
+          <AppearanceScreen />
+        </AppearanceContext.Provider>,
+      );
+
+      const [firstDecoration] = getDecorationsByCategory(DECORATION_CATEGORIES[0].id);
+      expect(screen.getByText(firstDecoration.label)).toBeTruthy();
+    } finally {
+      (resolveDecorationSource as jest.Mock).mockImplementation(actualDecorations.resolveDecorationSource);
+    }
+  });
+
+  it('état vide propre : une catégorie sans décoration affiche un message clair, jamais une galerie cassée', async () => {
+    (getDecorationsByCategory as jest.Mock).mockReturnValue([]);
+
+    try {
+      await render(
+        <AppearanceContext.Provider value={staticContextValue()}>
+          <AppearanceScreen />
+        </AppearanceContext.Provider>,
+      );
+
+      expect(screen.getByText('Aucun fond disponible dans cette catégorie pour le moment.')).toBeTruthy();
+    } finally {
+      (getDecorationsByCategory as jest.Mock).mockImplementation(actualDecorations.getDecorationsByCategory);
+    }
+  });
+
+  it('accessibilité : le bouton « Fond par défaut » a un libellé explicite et se désactive quand le fond est déjà par défaut', async () => {
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    const resetButton = screen.getByLabelText('Revenir au fond par défaut pour accueil');
+    expect(resetButton.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
   });
 });
 

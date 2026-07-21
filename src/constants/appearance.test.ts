@@ -2,6 +2,7 @@ import { Colors } from '@/constants/theme';
 import {
   APPEARANCE_COLOR_PRESETS,
   APPEARANCE_LIMITS,
+  BACKGROUND_SLOT_OPTIONS,
   DEFAULT_APPEARANCE_PREFERENCES,
   isValidHexColor,
   TEXT_SCALE_STEPS,
@@ -92,5 +93,13 @@ describe('THEME_MODE_OPTIONS (Phase 10.3)', () => {
 
   it('inclut la valeur par defaut ("system")', () => {
     expect(THEME_MODE_OPTIONS.some((option) => option.value === DEFAULT_APPEARANCE_PREFERENCES.themeMode)).toBe(true);
+  });
+});
+
+describe('BACKGROUND_SLOT_OPTIONS (Phase 10.4)', () => {
+  it('propose exactement les 3 sections definies dans backgrounds, sans doublon', () => {
+    expect(BACKGROUND_SLOT_OPTIONS.map((option) => option.value).sort()).toEqual(
+      Object.keys(DEFAULT_APPEARANCE_PREFERENCES.backgrounds).sort(),
+    );
   });
 });

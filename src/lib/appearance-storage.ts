@@ -8,6 +8,7 @@ import {
   isValidHexColor,
 } from '@/constants/appearance';
 import { isWolfAvatarId } from '@/constants/avatars';
+import { isDecorationId } from '@/constants/decorations';
 import { logDebugEvent } from '@/lib/logger';
 import type { AppearancePreferences, BackgroundConfig, BackgroundSlot, ThemeMode } from '@/types/appearance';
 
@@ -37,6 +38,15 @@ function sanitizeLevel(value: unknown, limits: { min: number; max: number }, fal
  * URL `http(s)` (ce serait le signe qu'une valeur distante — ou pire, une
  * URL signée — s'est glissée ici, voir contrainte Phase 10.1, section 8 :
  * aucune URL signée ni jeton n'est jamais stocké dans ces préférences).
+ *
+ * `decorationId` est revalidé contre le catalogue réel (`isDecorationId`,
+ * Phase 10.4) — pas seulement « une chaîne non vide » comme en Phase 10.1 :
+ * un identifiant qui ne correspond plus à aucune entrée (catalogue modifié
+ * entre deux versions de l'app, valeur corrompue) retombe sur `fallback`
+ * (le fond par défaut de la section), jamais une vignette ou un fond cassé.
+ * Aucun changement de forme du schéma (toujours `{ kind, decorationId }`) :
+ * pas de migration de version nécessaire, seulement une validation plus
+ * stricte du même champ.
  */
 function sanitizeBackgroundConfig(value: unknown, fallback: BackgroundConfig): BackgroundConfig {
   if (typeof value !== 'object' || value === null) return fallback;
@@ -44,11 +54,7 @@ function sanitizeBackgroundConfig(value: unknown, fallback: BackgroundConfig): B
 
   if (candidate.kind === 'default') return { kind: 'default' };
 
-  if (
-    candidate.kind === 'catalog' &&
-    typeof candidate.decorationId === 'string' &&
-    candidate.decorationId.length > 0
-  ) {
+  if (candidate.kind === 'catalog' && typeof candidate.decorationId === 'string' && isDecorationId(candidate.decorationId)) {
     return { kind: 'catalog', decorationId: candidate.decorationId };
   }
 

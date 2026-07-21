@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppLoadingState } from '@/components/app-loading-state';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { DecorationTile } from '@/components/decoration-tile';
 import { ScreenHeader } from '@/components/screen-header';
 import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { APPEARANCE_COLOR_PRESETS, TEXT_SCALE_STEPS, THEME_MODE_OPTIONS } from '@/constants/appearance';
+import { APPEARANCE_COLOR_PRESETS, BACKGROUND_SLOT_OPTIONS, TEXT_SCALE_STEPS, THEME_MODE_OPTIONS } from '@/constants/appearance';
+import {
+  DECORATION_CATEGORIES,
+  getDecorationsByCategory,
+  resolveDecorationSource,
+  type DecorationCategoryId,
+} from '@/constants/decorations';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useAppearanceContext } from '@/contexts/appearance-context';
 import { useTheme } from '@/hooks/use-theme';
-import type { AppearancePreferences } from '@/types/appearance';
+import type { AppearancePreferences, BackgroundConfig, BackgroundSlot } from '@/types/appearance';
 
 type ColorTarget = 'accentColor' | 'buttonColor' | 'bubbleSentColor' | 'bubbleReceivedColor';
 
@@ -23,6 +30,10 @@ const COLOR_TARGETS: readonly { key: ColorTarget; label: string }[] = [
   { key: 'bubbleReceivedColor', label: 'Bulles reçues' },
 ];
 
+function backgroundSlotLabel(slot: BackgroundSlot): string {
+  return BACKGROUND_SLOT_OPTIONS.find((option) => option.value === slot)?.label ?? slot;
+}
+
 /** Durée d'affichage de la confirmation discrète après une sauvegarde ou une réinitialisation. */
 const CONFIRMATION_DURATION_MS = 2000;
 
@@ -31,6 +42,12 @@ export default function AppearanceScreen() {
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const confirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Section actuellement éditée et catégorie affichée dans la galerie
+  // (Phase 10.4) : navigation purement locale à l'écran, jamais persistée
+  // telle quelle — seul le choix effectif d'un fond (ou « Fond par défaut »)
+  // modifie `AppearancePreferences`.
+  const [activeSlot, setActiveSlot] = useState<BackgroundSlot>('home');
+  const [activeCategory, setActiveCategory] = useState<DecorationCategoryId>(DECORATION_CATEGORIES[0].id);
 
   // Nettoyage du minuteur de confirmation au démontage (navigation retour
   // pendant l'affichage du message) : évite un setState après démontage.
@@ -69,6 +86,12 @@ export default function AppearanceScreen() {
     showConfirmation('Préférences réinitialisées.');
   }
 
+  const currentSlotBackground = preferences.backgrounds[activeSlot];
+
+  function applyBackgroundChange(nextBackground: BackgroundConfig) {
+    return applyChange({ backgrounds: { ...preferences.backgrounds, [activeSlot]: nextBackground } });
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader title="Apparence" />
@@ -77,7 +100,40 @@ export default function AppearanceScreen() {
         <AppLoadingState accessibilityLabel="Chargement des préférences d'apparence" />
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <AppearancePreviewCard />
+          <AppearancePreviewCard activeSlot={activeSlot} />
+
+          <Card style={styles.card}>
+            <ThemedText type="label" themeColor="textSecondary">
+              Fonds d’écran
+            </ThemedText>
+
+            <ThemedText type="bodySmall" themeColor="textSecondary">
+              Appliquer à
+            </ThemedText>
+            <SegmentedControl
+              options={BACKGROUND_SLOT_OPTIONS}
+              value={activeSlot}
+              onChange={setActiveSlot}
+              accessibilityLabel="Section à personnaliser"
+            />
+
+            <CategoryTabs value={activeCategory} onChange={setActiveCategory} />
+
+            <DecorationGalleryRow
+              categoryId={activeCategory}
+              selectedDecorationId={currentSlotBackground.kind === 'catalog' ? currentSlotBackground.decorationId : null}
+              onSelect={(decorationId) => applyBackgroundChange({ kind: 'catalog', decorationId })}
+            />
+
+            <Button
+              label="Fond par défaut"
+              onPress={() => applyBackgroundChange({ kind: 'default' })}
+              variant="secondary"
+              size="small"
+              disabled={currentSlotBackground.kind === 'default'}
+              accessibilityLabel={`Revenir au fond par défaut pour ${backgroundSlotLabel(activeSlot).toLowerCase()}`}
+            />
+          </Card>
 
           <Card style={styles.card}>
             <ThemedText type="label" themeColor="textSecondary">
@@ -136,52 +192,181 @@ export default function AppearanceScreen() {
   );
 }
 
+type AppearancePreviewCardProps = {
+  /** Section dont le fond d'écran est prévisualisé (Phase 10.4) — la palette (thème/couleurs) reste toujours globale. */
+  activeSlot: BackgroundSlot;
+};
+
 /**
- * Aperçu en temps réel : aucune prop de préférences — lit `useTheme()`
- * directement, comme n'importe quel autre écran de l'app. Reflète donc
- * automatiquement chaque changement appliqué ci-dessus (même Provider
- * partagé, voir `AppearanceContext`), sans plomberie supplémentaire.
+ * Aperçu en temps réel : lit `useTheme()` directement, comme n'importe quel
+ * autre écran de l'app — reflète donc automatiquement chaque changement de
+ * thème/couleurs appliqué ci-dessus (même Provider partagé, voir
+ * `AppearanceContext`), sans plomberie supplémentaire. Le fond d'écran
+ * affiché est celui de la section actuellement éditée (`activeSlot`,
+ * Phase 10.4) : `theme.preferences` expose déjà l'intégralité des
+ * préférences (voir `use-theme.ts`), donc aucune prop supplémentaire n'est
+ * nécessaire pour le résoudre.
  *
  * L'ensemble est regroupé en un seul nœud d'accessibilité (`accessible` sur
  * la carte) : le texte des bulles factices ci-dessous est un exemple
  * purement visuel, jamais une information à parcourir élément par élément
  * au lecteur d'écran.
  */
-function AppearancePreviewCard() {
+function AppearancePreviewCard({ activeSlot }: AppearancePreviewCardProps) {
+  const theme = useTheme();
+  const background = theme.preferences.backgrounds[activeSlot];
+  const imageSource = background.kind === 'catalog' ? resolveDecorationSource(background.decorationId) : null;
+
+  const content = (
+    <>
+      <ThemedText type="label" style={styles.previewHeaderText}>
+        White Alpha
+      </ThemedText>
+
+      <View
+        testID="appearance-preview-bubble-received"
+        style={[
+          styles.previewBubble,
+          styles.previewBubbleReceived,
+          { backgroundColor: theme.bubbleReceivedColor, borderWidth: 1, borderColor: theme.border },
+        ]}>
+        <ThemedText type="bodySmall">Salut, ça va ?</ThemedText>
+      </View>
+      <View
+        testID="appearance-preview-bubble-sent"
+        style={[styles.previewBubble, styles.previewBubbleSent, { backgroundColor: theme.bubbleSentColor }]}>
+        <ThemedText type="bodySmall" style={{ color: theme.onAccent }}>
+          Oui, et toi ?
+        </ThemedText>
+      </View>
+
+      <View testID="appearance-preview-button" style={[styles.previewButton, { backgroundColor: theme.buttonColor }]}>
+        <ThemedText type="label" style={{ color: theme.onAccent }}>
+          Bouton
+        </ThemedText>
+      </View>
+    </>
+  );
+
+  const accessibilityLabel = `Aperçu de l'apparence pour ${backgroundSlotLabel(activeSlot).toLowerCase()} : thème, fond d'écran, couleurs des bulles et du bouton`;
+
+  return (
+    <Card elevated accessible accessibilityLabel={accessibilityLabel} style={styles.previewCard}>
+      {imageSource ? (
+        <ImageBackground
+          testID="appearance-preview-background"
+          source={imageSource}
+          resizeMode="cover"
+          style={[styles.previewPhone, { borderColor: theme.border }]}
+          imageStyle={{ borderRadius: Radius.lg }}>
+          {content}
+        </ImageBackground>
+      ) : (
+        <View
+          testID="appearance-preview-background"
+          style={[styles.previewPhone, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          {content}
+        </View>
+      )}
+    </Card>
+  );
+}
+
+type CategoryTabsProps = {
+  value: DecorationCategoryId;
+  onChange: (value: DecorationCategoryId) => void;
+};
+
+/** Navigation horizontale par catégorie (Phase 10.4) : chips non étirées, contrairement à `SegmentedControl` (adapté à 8 options de largeur variable). */
+function CategoryTabs({ value, onChange }: CategoryTabsProps) {
   const theme = useTheme();
 
   return (
-    <Card
-      elevated
-      accessible
-      accessibilityLabel="Aperçu de l'apparence : thème, couleurs des bulles et du bouton"
-      style={styles.previewCard}>
-      <View style={[styles.previewPhone, { backgroundColor: theme.background, borderColor: theme.border }]}>
-        <ThemedText type="label" style={styles.previewHeaderText}>
-          White Alpha
-        </ThemedText>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.categoryRow}
+      accessibilityRole="tablist"
+      accessibilityLabel="Catégories de décorations">
+      {DECORATION_CATEGORIES.map((category) => {
+        const isSelected = category.id === value;
+        return (
+          <Pressable
+            key={category.id}
+            onPress={() => onChange(category.id)}
+            accessibilityRole="tab"
+            accessibilityLabel={category.label}
+            accessibilityState={{ selected: isSelected }}
+            style={({ pressed }) => [
+              styles.categoryChip,
+              { borderColor: theme.border },
+              isSelected && { backgroundColor: theme.accent, borderColor: theme.accent },
+              pressed && !isSelected && styles.pressed,
+            ]}>
+            <ThemedText
+              type="label"
+              style={{ color: isSelected ? theme.onAccent : theme.textSecondary, fontWeight: isSelected ? '700' : '500' }}>
+              {category.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
 
-        <View
-          style={[
-            styles.previewBubble,
-            styles.previewBubbleReceived,
-            { backgroundColor: theme.bubbleReceivedColor, borderWidth: 1, borderColor: theme.border },
-          ]}>
-          <ThemedText type="bodySmall">Salut, ça va ?</ThemedText>
-        </View>
-        <View style={[styles.previewBubble, styles.previewBubbleSent, { backgroundColor: theme.bubbleSentColor }]}>
-          <ThemedText type="bodySmall" style={{ color: theme.onAccent }}>
-            Oui, et toi ?
-          </ThemedText>
-        </View>
+type DecorationGalleryRowProps = {
+  categoryId: DecorationCategoryId;
+  selectedDecorationId: string | null;
+  onSelect: (decorationId: string) => void;
+};
 
-        <View style={[styles.previewButton, { backgroundColor: theme.buttonColor }]}>
-          <ThemedText type="label" style={{ color: theme.onAccent }}>
-            Bouton
-          </ThemedText>
-        </View>
-      </View>
-    </Card>
+/** Repère de sélection non basé uniquement sur la couleur (coche + bordure épaisse) — même principe que `ColorPresetRow`/`avatar-gallery.tsx`. */
+function DecorationGalleryRow({ categoryId, selectedDecorationId, onSelect }: DecorationGalleryRowProps) {
+  const theme = useTheme();
+  const decorations = getDecorationsByCategory(categoryId);
+
+  if (decorations.length === 0) {
+    return (
+      <ThemedText type="bodySmall" themeColor="textSecondary">
+        Aucun fond disponible dans cette catégorie pour le moment.
+      </ThemedText>
+    );
+  }
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.decorationRow}>
+      {decorations.map((entry) => {
+        const isSelected = entry.id === selectedDecorationId;
+        return (
+          <Pressable
+            key={entry.id}
+            onPress={() => onSelect(entry.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${entry.label}${isSelected ? ' (sélectionné)' : ''}`}
+            accessibilityState={{ selected: isSelected }}
+            style={({ pressed }) => [styles.decorationWrapper, pressed && styles.pressed]}>
+            <View
+              style={[
+                styles.decorationRing,
+                isSelected ? { borderColor: theme.text, borderWidth: 3 } : { borderColor: theme.border, borderWidth: 1 },
+              ]}>
+              <DecorationTile id={entry.id} width={88} height={88} />
+              {isSelected && (
+                <View
+                  style={[
+                    styles.checkBadge,
+                    styles.decorationCheckBadge,
+                    { backgroundColor: theme.surface, borderColor: theme.text },
+                  ]}>
+                  <ThemedText type="caption">✓</ThemedText>
+                </View>
+              )}
+            </View>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -297,5 +482,34 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  categoryChip: {
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  decorationRow: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  decorationWrapper: {
+    alignItems: 'center',
+  },
+  decorationRing: {
+    borderRadius: Radius.md,
+    padding: 3,
+    position: 'relative',
+  },
+  decorationCheckBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
   },
 });

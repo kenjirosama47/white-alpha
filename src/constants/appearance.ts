@@ -7,7 +7,7 @@
 
 import { DEFAULT_WOLF_AVATAR_ID } from '@/constants/avatars';
 import { Colors } from '@/constants/theme';
-import type { AppearancePreferences } from '@/types/appearance';
+import type { AppearancePreferences, BackgroundSlot } from '@/types/appearance';
 
 /** Incrémentée à chaque changement de forme du schéma stocké (voir `appearance-storage.ts`). */
 export const APPEARANCE_SCHEMA_VERSION = 1;
@@ -95,3 +95,15 @@ export const THEME_MODE_OPTIONS = [
   { value: 'light', label: 'Clair' },
   { value: 'dark', label: 'Sombre' },
 ] as const satisfies readonly { value: AppearancePreferences['themeMode']; label: string }[];
+
+/**
+ * Options du sélecteur « Appliquer à » (Phase 10.4, galerie de décorations)
+ * — reprend `BackgroundSlot` tel quel. Le libellé « Accueil » couvre à la
+ * fois la page d'accueil et la liste des conversations : dans White Alpha,
+ * c'est le même écran (`src/app/(app)/index.tsx`, `ConversationsScreen`).
+ */
+export const BACKGROUND_SLOT_OPTIONS = [
+  { value: 'home', label: 'Accueil' },
+  { value: 'conversation', label: 'Conversation' },
+  { value: 'profile', label: 'Profil' },
+] as const satisfies readonly { value: BackgroundSlot; label: string }[];

@@ -117,16 +117,23 @@ describe('sanitizeAppearancePreferences', () => {
     expect(result.blurLevel).toBe(DEFAULT_APPEARANCE_PREFERENCES.blurLevel);
   });
 
-  it('accepte un fond catalogue avec un decorationId non vide', () => {
+  it('accepte un fond catalogue avec un decorationId reconnu (Phase 10.4)', () => {
     const result = sanitizeAppearancePreferences({
-      backgrounds: { home: { kind: 'catalog', decorationId: 'forest_01' } },
+      backgrounds: { home: { kind: 'catalog', decorationId: 'forest_canopy' } },
     });
-    expect(result.backgrounds.home).toEqual({ kind: 'catalog', decorationId: 'forest_01' });
+    expect(result.backgrounds.home).toEqual({ kind: 'catalog', decorationId: 'forest_canopy' });
   });
 
   it('rejette un fond catalogue sans decorationId', () => {
     const result = sanitizeAppearancePreferences({ backgrounds: { home: { kind: 'catalog' } } });
     expect(result.backgrounds.home).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.home);
+  });
+
+  it('rejette un decorationId qui ne correspond a aucune entree du catalogue (Phase 10.4 — identifiant invalide)', () => {
+    const result = sanitizeAppearancePreferences({
+      backgrounds: { conversation: { kind: 'catalog', decorationId: 'fond-invente-qui-nexiste-pas' } },
+    });
+    expect(result.backgrounds.conversation).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.conversation);
   });
 
   it('accepte un fond personnel avec un chemin de fichier local', () => {
