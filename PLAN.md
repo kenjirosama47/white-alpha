@@ -1026,6 +1026,54 @@ conservation, différence entre nettoyage local et suppression serveur,
 risques de perte de données, fichiers à modifier, éventuelle migration
 nécessaire, nécessité de nouveaux builds Android et iOS.
 
+## Phase 10 — Personnalisation de l'apparence (arrière-plans et photo personnelle)
+
+### 10.5a — Photo personnelle locale et correctif de confidentialité Glide — Terminée et validée
+
+Contexte : la galerie de décorations (choix d'un arrière-plan prédéfini
+pour l'écran de personnalisation) est terminée. Cette sous-phase y ajoute
+la possibilité d'utiliser une photo personnelle de l'utilisateur comme
+arrière-plan, ainsi qu'un correctif de confidentialité découvert pendant
+cette implémentation.
+
+**Photo personnelle locale**
+- Ajout d'une photo personnelle depuis la pellicule, en plus des fonds
+  prédéfinis du catalogue, sur le même écran d'apparence.
+- Recadrage portrait 9:16, cohérent avec le ratio des fonds du catalogue.
+- Compression de l'image et suppression de ses métadonnées (EXIF) avant
+  tout stockage.
+- Stockage strictement privé et local (répertoire documents de
+  l'application) : aucun envoi, à aucun moment, vers Supabase ou tout
+  autre service distant.
+- Remplacement d'une photo personnelle par une autre : aucun fichier
+  orphelin laissé sur disque.
+- Suppression de la photo personnelle : retour propre au fond par défaut.
+- La photo personnelle choisie persiste après redémarrage de
+  l'application.
+- Annulation gérée correctement à chaque étape du flux (sélecteur de
+  photo, recadrage, aperçu avant validation) : aucun état partiel ni
+  fichier temporaire résiduel.
+- Nettoyage du cache du sélecteur d'image (ImagePicker) validé après
+  chaque flux, y compris en cas d'annulation.
+
+**Correctif de confidentialité Glide**
+- `EXPO_ALLOW_GLIDE_LOGS=false` forcé de façon reproductible via le plugin
+  `withAndroidHardening` (`gradle.properties`).
+- `expo-image` compilé depuis les sources (`buildFromSource`) : nécessaire
+  pour que ce correctif soit réellement effectif, l'AAR précompilé par
+  défaut ignorant cette propriété Gradle.
+- Vérifié après correctif : aucune URI locale, aucun chemin de fichier
+  privé, aucun UUID de fichier dans le logcat en build Release.
+
+**Validation**
+- Validation Android réelle effectuée sur émulateur (pas uniquement en
+  environnement de développement Metro).
+- 8 scénarios de validation manuelle exécutés sur émulateur, tous
+  validés (scénarios 1 à 8).
+- Tests automatisés : 822/822 au moment de la clôture de la sous-phase.
+- Commit fonctionnel de référence :
+  `8817ab07c55ef9f0b24eb52514a090067cb76b83`.
+
 ## Décision d'architecture — Supabase & Railway
 
 - **Supabase** reste la seule plateforme backend pendant la Phase 2 et au-delà pour :
