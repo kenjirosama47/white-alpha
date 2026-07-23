@@ -1,13 +1,25 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, type View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  type View,
+} from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppEmptyState } from '@/components/app-empty-state';
 import { AppErrorState } from '@/components/app-error-state';
+import { AppearanceBackground } from '@/components/appearance-background';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { AttachmentComposerPreview } from '@/components/attachment-composer-preview';
+import { AttachmentMenu } from '@/components/attachment-menu';
 import { AvatarImage } from '@/components/avatar-image';
 import { Button } from '@/components/button';
 import { DateSeparator } from '@/components/date-separator';
@@ -18,6 +30,7 @@ import { ThemedView } from '@/components/themed-view';
 import { isWolfAvatarId } from '@/constants/avatars';
 import { MaxContentWidth, Radius, Spacing, TouchTarget } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth-context';
+import { clearConversation } from '@/services/conversations';
 import { useMediaUpload } from '@/hooks/use-media-upload';
 import { useMessageDeletion } from '@/hooks/use-message-deletion';
 import { useMessages } from '@/hooks/use-messages';
@@ -73,6 +86,9 @@ export default function ConversationScreen() {
   } = useMediaUpload(id);
   const [draft, setDraft] = useState('');
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false);
+  const [isClearingConversation, setIsClearingConversation] = useState(false);
+  const [clearConversationError, setClearConversationError] = useState<string | null>(null);
   // Élément (vignette pressée) sur lequel restaurer le focus d'accessibilité
   // à la fermeture de la visionneuse — une ref, jamais un state : sa valeur
   // n'a besoin d'aucun re-rendu, seulement d'être lue au moment de fermer.
@@ -103,8 +119,37 @@ export default function ConversationScreen() {
     await sendMedia();
   }
 
+  /** Confirmation explicite avant toute suppression, jamais déclenchée deux fois pendant qu'une suppression est déjà en cours (voir handleConfirmClearConversation). */
+  function handleClearConversationPress() {
+    if (isClearingConversation) return;
+    Alert.alert(
+      'Effacer toute la conversation ?',
+      'Tous les messages et médias de cette conversation seront définitivement supprimés. Cette action est irréversible.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Effacer définitivement', style: 'destructive', onPress: handleConfirmClearConversation },
+      ],
+    );
+  }
+
+  /** Effacement réel côté serveur (voir services/conversations.ts). `isClearingConversation` empêche tout double appel (double tap sur le bouton destructif). */
+  async function handleConfirmClearConversation() {
+    if (isClearingConversation) return;
+    setIsClearingConversation(true);
+    setClearConversationError(null);
+    try {
+      await clearConversation(id);
+      router.back();
+    } catch (err) {
+      setClearConversationError(
+        err instanceof Error ? err.message : 'Impossible d’effacer la conversation pour le moment.',
+      );
+      setIsClearingConversation(false);
+    }
+  }
+
   return (
-    <ThemedView forcedScheme="dark" style={styles.container}>
+    <AppearanceBackground slot="conversation" forcedScheme="dark" style={styles.container} testID="conversation-appearance-background">
       {/* edges sans 'bottom' : l'inset bas (barre de navigation Android en
           edge-to-edge) est géré explicitement sur la zone de rédaction
           ci-dessous, pas ici, pour éviter un double espacement quand le
@@ -128,8 +173,29 @@ export default function ConversationScreen() {
               {otherDisplayName ?? 'Discussion'}
             </ThemedText>
           </ThemedView>
-          <ThemedView forcedScheme="dark" style={styles.headerSpacer} />
+          <Pressable
+            onPress={handleClearConversationPress}
+            disabled={isClearingConversation}
+            hitSlop={8}
+            style={styles.headerSpacer}
+            accessibilityRole="button"
+            accessibilityLabel="Effacer la conversation"
+            accessibilityState={{ disabled: isClearingConversation }}>
+            <ThemedText type="body" forcedScheme="dark" style={styles.clearIcon}>
+              🖌️
+            </ThemedText>
+          </Pressable>
         </ThemedView>
+        {clearConversationError && (
+          <ThemedText
+            type="bodySmall"
+            themeColor="danger"
+            forcedScheme="dark"
+            style={styles.errorPadding}
+            accessibilityRole="alert">
+            {clearConversationError}
+          </ThemedText>
+        )}
 
         {/* L'en-tête reste au-dessus, hors du KeyboardAvoidingView, donc
             jamais déplacé par le clavier. Seuls la liste et le composer se
@@ -222,6 +288,10 @@ export default function ConversationScreen() {
               onCancel={cancelMedia}
               onCancelUpload={cancelUpload}
               onSend={handleSendMedia}
+              onReplace={() => {
+                cancelMedia();
+                setAttachmentMenuVisible(true);
+              }}
             />
           )}
           {/* Composeur « carte sombre » (Anomalie 2, build 16) : élevé sur le
@@ -237,28 +307,24 @@ export default function ConversationScreen() {
               { borderColor: theme.border, backgroundColor: theme.surfaceHigh },
               { marginBottom: Math.max(insets.bottom, Spacing.two) },
             ]}>
-            <ThemedView forcedScheme="dark" style={styles.mediaButtons}>
-              <Button
-                label="Photo"
-                onPress={pickImage}
-                disabled={!!pickedMedia || isUploadingMedia}
-                variant="ghost"
-                size="small"
-                accessibilityLabel="Ajouter une photo"
-                forcedScheme="dark"
-                style={styles.mediaButton}
-              />
-              <Button
-                label="Vidéo"
-                onPress={pickVideo}
-                disabled={!!pickedMedia || isUploadingMedia}
-                variant="ghost"
-                size="small"
-                accessibilityLabel="Ajouter une vidéo"
-                forcedScheme="dark"
-                style={styles.mediaButton}
-              />
-            </ThemedView>
+            <Pressable
+              onPress={() => setAttachmentMenuVisible(true)}
+              disabled={!!pickedMedia || isUploadingMedia}
+              hitSlop={8}
+              style={({ pressed }) => [styles.attachmentButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter une pièce jointe"
+              accessibilityState={{ disabled: !!pickedMedia || isUploadingMedia }}>
+              <ThemedText type="body" forcedScheme="dark" style={styles.attachmentIcon}>
+                📎
+              </ThemedText>
+            </Pressable>
+            <AttachmentMenu
+              visible={attachmentMenuVisible}
+              onClose={() => setAttachmentMenuVisible(false)}
+              onPickImage={pickImage}
+              onPickVideo={pickVideo}
+            />
             <TextInput
               placeholder="Écrire un message..."
               placeholderTextColor={theme.textSecondary}
@@ -285,7 +351,7 @@ export default function ConversationScreen() {
         </KeyboardAvoidingView>
       </SafeAreaView>
       <ImageViewerModal url={viewerUrl} onClose={() => setViewerUrl(null)} triggerRef={imageViewerTriggerRef} />
-    </ThemedView>
+    </AppearanceBackground>
   );
 }
 
@@ -322,6 +388,10 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 50,
+    alignItems: 'flex-end',
+  },
+  clearIcon: {
+    fontSize: 20,
   },
   keyboardAvoiding: {
     flex: 1,
@@ -352,12 +422,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  mediaButtons: {
-    flexDirection: 'row',
-    gap: Spacing.one,
+  attachmentButton: {
+    width: TouchTarget.min,
+    minHeight: TouchTarget.min,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  mediaButton: {
-    paddingHorizontal: Spacing.two,
+  attachmentIcon: {
+    fontSize: 22,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   input: {
     flex: 1,

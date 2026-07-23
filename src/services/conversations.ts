@@ -76,6 +76,32 @@ type ConversationForNotificationRow = {
  * Conversations" : accès perdu, conversation supprimée, ou identifiant
  * invalide — jamais une erreur qui distinguerait ces cas entre eux.
  */
+type ClearConversationResponse = {
+  cleared: boolean;
+  messageCount: number;
+};
+
+/**
+ * Efface définitivement tous les messages et pièces jointes d'une
+ * conversation, pour les deux participants (messages, pièces jointes,
+ * fichiers Storage) — voir supabase/functions/clear-conversation. La
+ * conversation elle-même n'est jamais supprimée. Réservée à un participant
+ * de la conversation (vérifié côté serveur, jamais côté client). Ne renvoie
+ * et ne journalise jamais de chemin Storage, d'URL signée ni de contenu de
+ * message : uniquement un nombre de messages effacés.
+ */
+export async function clearConversation(conversationId: string): Promise<number> {
+  const { data, error } = await supabase.functions.invoke<ClearConversationResponse>('clear-conversation', {
+    body: { conversation_id: conversationId },
+  });
+
+  if (error || !data?.cleared) {
+    throw new Error('Impossible d’effacer la conversation pour le moment.');
+  }
+
+  return data.messageCount;
+}
+
 export async function getConversationForNotification(
   conversationId: string,
 ): Promise<ConversationSummary['otherParticipant'] & { conversationId: string } | null> {

@@ -11,17 +11,13 @@ import { SegmentedControl } from '@/components/segmented-control';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { APPEARANCE_COLOR_PRESETS, BACKGROUND_SLOT_OPTIONS, TEXT_SCALE_STEPS, THEME_MODE_OPTIONS } from '@/constants/appearance';
-import {
-  DECORATION_CATEGORIES,
-  getDecorationsByCategory,
-  resolveDecorationSource,
-  type DecorationCategoryId,
-} from '@/constants/decorations';
+import { DECORATION_CATEGORIES, getDecorationsByCategory, type DecorationCategoryId } from '@/constants/decorations';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useAppearanceContext } from '@/contexts/appearance-context';
 import { usePersonalPhotoEditor } from '@/hooks/use-personal-photo-editor';
 import { useTheme } from '@/hooks/use-theme';
 import { deletePersonalPhotoFile, personalPhotoFileExists } from '@/lib/personal-photo-storage';
+import { resolveBackgroundSource } from '@/lib/resolve-background-source';
 import type { AppearancePreferences, BackgroundConfig, BackgroundSlot } from '@/types/appearance';
 
 type ColorTarget = 'accentColor' | 'buttonColor' | 'bubbleSentColor' | 'bubbleReceivedColor';
@@ -291,12 +287,7 @@ type AppearancePreviewCardProps = {
 function AppearancePreviewCard({ activeSlot }: AppearancePreviewCardProps) {
   const theme = useTheme();
   const background = theme.preferences.backgrounds[activeSlot];
-  const imageSource =
-    background.kind === 'catalog'
-      ? resolveDecorationSource(background.decorationId)
-      : background.kind === 'personal' && personalPhotoFileExists(background.localUri)
-        ? { uri: background.localUri }
-        : null;
+  const imageSource = resolveBackgroundSource(background);
 
   const content = (
     <>

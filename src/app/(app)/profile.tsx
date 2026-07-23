@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet } from 'react-native';
 
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
+import { AppearanceBackground } from '@/components/appearance-background';
 import { AvatarImage } from '@/components/avatar-image';
 import { Badge } from '@/components/badge';
 import { Button } from '@/components/button';
@@ -26,7 +27,7 @@ export default function ProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
 
   return (
-    <ThemedView style={styles.container}>
+    <AppearanceBackground slot="profile" style={styles.container} testID="profile-appearance-background">
       <ScreenHeader
         title={isEditing ? 'Modifier le profil' : 'Profil'}
         onBack={isEditing ? () => setIsEditing(false) : undefined}
@@ -50,7 +51,7 @@ export default function ProfileScreen() {
       ) : (
         <ProfileView profile={profile} onEdit={() => setIsEditing(true)} />
       )}
-    </ThemedView>
+    </AppearanceBackground>
   );
 }
 

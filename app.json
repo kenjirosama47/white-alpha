@@ -2,7 +2,7 @@
   "expo": {
     "name": "White Alpha",
     "slug": "Discussion_Privee_Claude",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "whitealpha",
@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.kenjiro.whitealpha",
-      "versionCode": 18,
+      "versionCode": 19,
       "allowBackup": false,
       "blockedPermissions": ["android.permission.READ_MEDIA_IMAGES"]
     },

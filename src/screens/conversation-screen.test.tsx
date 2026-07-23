@@ -1,13 +1,31 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { router } from 'expo-router';
+import { Alert } from 'react-native';
 import { FadeIn } from 'react-native-reanimated';
 
 import ConversationScreen from '@/app/(app)/conversation/[id]';
+import { clearConversation } from '@/services/conversations';
 import type { Message } from '@/types/chat';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
   useLocalSearchParams: () => ({ id: 'conv-1', otherDisplayName: 'Bob', otherAvatarPreset: 'wolf_grey' }),
 }));
+
+jest.mock('@/services/conversations', () => ({
+  clearConversation: jest.fn(),
+}));
+
+const mockClearConversation = clearConversation as jest.Mock;
+
+/** Simule l'appui utilisateur sur le bouton demandé (par titre exact) de la dernière Alert.alert affichée. */
+function pressAlertButton(buttonText: string) {
+  const alertSpy = Alert.alert as jest.Mock;
+  const lastCall = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+  const buttons = lastCall?.[2] as { text: string; onPress?: () => void }[];
+  const button = buttons?.find((b) => b.text === buttonText);
+  button?.onPress?.();
+}
 
 jest.mock('react-native-safe-area-context', () => {
   const actual = jest.requireActual('react-native-safe-area-context');
@@ -191,17 +209,35 @@ describe('ConversationScreen — photo et vidéo', () => {
     mockIsUploadingMedia = false;
   });
 
-  it('le bouton Photo déclenche la sélection depuis la bibliothèque', async () => {
+  it("l'icône trombone reste visible et cliquable, et ouvre le menu Photo/Vidéo/Annuler", async () => {
     await render(<ConversationScreen />);
 
+    const attachmentButton = screen.getByLabelText('Ajouter une pièce jointe');
+    expect(attachmentButton).toBeTruthy();
+    expect(screen.queryByText('Photo')).toBeNull();
+
+    fireEvent.press(attachmentButton);
+
+    await waitFor(() => expect(screen.getByText('Photo')).toBeTruthy());
+    expect(screen.getByText('Vidéo')).toBeTruthy();
+    expect(screen.getByText('Annuler')).toBeTruthy();
+  });
+
+  it('le trombone puis Photo déclenche la sélection depuis la bibliothèque', async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Ajouter une pièce jointe'));
+    await waitFor(() => expect(screen.getByText('Photo')).toBeTruthy());
     fireEvent.press(screen.getByText('Photo'));
 
     expect(mockPickImage).toHaveBeenCalledTimes(1);
   });
 
-  it('le bouton Vidéo déclenche la sélection depuis la bibliothèque', async () => {
+  it('le trombone puis Vidéo déclenche la sélection depuis la bibliothèque', async () => {
     await render(<ConversationScreen />);
 
+    fireEvent.press(screen.getByLabelText('Ajouter une pièce jointe'));
+    await waitFor(() => expect(screen.getByText('Vidéo')).toBeTruthy());
     fireEvent.press(screen.getByText('Vidéo'));
 
     expect(mockPickVideo).toHaveBeenCalledTimes(1);
@@ -263,16 +299,19 @@ describe('ConversationScreen — photo et vidéo', () => {
     expect(mockCancelUpload).toHaveBeenCalledTimes(1);
   });
 
-  it('le bouton Photo/Vidéo est désactivé pendant qu’un média est en cours de préparation ou d’upload', async () => {
+  it('le trombone est désactivé (menu ne s’ouvre pas) pendant qu’un média est en cours de préparation ou d’upload', async () => {
     mockPickedMedia = {
       kind: 'image',
       data: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', sizeBytes: 1000, width: 100, height: 100 },
     };
     await render(<ConversationScreen />);
 
-    fireEvent.press(screen.getByText('Vidéo'));
-    // Une pièce jointe est déjà sélectionnée : un second média ne doit pas être lancé.
+    fireEvent.press(screen.getByLabelText('Ajouter une pièce jointe'));
+    // Une pièce jointe est déjà sélectionnée : le trombone est désactivé, le
+    // menu ne s'ouvre pas, un second média ne doit pas être lancé.
+    expect(screen.queryByText('Vidéo')).toBeNull();
     expect(mockPickVideo).not.toHaveBeenCalled();
+    expect(mockPickImage).not.toHaveBeenCalled();
   });
 
   it("n'empêche jamais l'envoi d'un message texte pendant la préparation d'une vidéo", async () => {
@@ -372,4 +411,91 @@ describe("ConversationScreen — en-tête (Anomalie 1/2, build 16)", () => {
       expect(screen.getByLabelText('Avatar loup de Bob')).toBeTruthy();
     },
   );
+});
+
+describe('ConversationScreen — effacer la conversation (icône pinceau)', () => {
+  let alertSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    mockClearConversation.mockReset();
+    (router.back as jest.Mock).mockReset();
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
+  });
+
+  it("l'icône pinceau est visible et accessible", async () => {
+    await render(<ConversationScreen />);
+
+    expect(screen.getByLabelText('Effacer la conversation')).toBeTruthy();
+  });
+
+  it('affiche une confirmation explicite (titre + message + Annuler/Effacer définitivement) au premier appui, sans encore rien effacer', async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Effacer toute la conversation ?',
+      'Tous les messages et médias de cette conversation seront définitivement supprimés. Cette action est irréversible.',
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Annuler' }),
+        expect.objectContaining({ text: 'Effacer définitivement', style: 'destructive' }),
+      ]),
+    );
+    expect(mockClearConversation).not.toHaveBeenCalled();
+  });
+
+  it("Annuler : rien n'est supprimé", async () => {
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+    pressAlertButton('Annuler');
+
+    expect(mockClearConversation).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it('Effacer définitivement : appelle clearConversation avec le bon id puis revient à la liste des conversations', async () => {
+    mockClearConversation.mockResolvedValue(5);
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+    pressAlertButton('Effacer définitivement');
+
+    await waitFor(() => expect(mockClearConversation).toHaveBeenCalledWith('conv-1'));
+    await waitFor(() => expect(router.back).toHaveBeenCalledTimes(1));
+  });
+
+  it('affiche un message clair en cas d’échec, sans revenir à la liste', async () => {
+    mockClearConversation.mockRejectedValue(new Error('Impossible d’effacer la conversation pour le moment.'));
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+    pressAlertButton('Effacer définitivement');
+
+    await waitFor(() => expect(screen.getByText('Impossible d’effacer la conversation pour le moment.')).toBeTruthy());
+    expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it('empêche le double appel : un second appui pendant la suppression en cours ne déclenche pas un second clearConversation', async () => {
+    let resolveClear: (value: number) => void = () => {};
+    mockClearConversation.mockReturnValue(
+      new Promise<number>((resolve) => {
+        resolveClear = resolve;
+      }),
+    );
+    await render(<ConversationScreen />);
+
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+    pressAlertButton('Effacer définitivement');
+    // Second appui pendant que la suppression est encore en cours (bouton désactivé).
+    fireEvent.press(screen.getByLabelText('Effacer la conversation'));
+
+    expect(mockClearConversation).toHaveBeenCalledTimes(1);
+    resolveClear(3);
+    await waitFor(() => expect(router.back).toHaveBeenCalledTimes(1));
+  });
 });

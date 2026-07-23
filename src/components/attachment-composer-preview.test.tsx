@@ -26,6 +26,7 @@ describe('AttachmentComposerPreview — photo', () => {
         onCancel={onCancel}
         onCancelUpload={jest.fn()}
         onSend={onSend}
+        onReplace={jest.fn()}
       />,
     );
 
@@ -43,6 +44,30 @@ describe('AttachmentComposerPreview — photo', () => {
   });
 });
 
+describe('AttachmentComposerPreview — remplacer', () => {
+  it('le bouton Remplacer appelle onReplace (retire le média et rouvre le menu trombone)', async () => {
+    const onReplace = jest.fn();
+    await render(
+      <AttachmentComposerPreview
+        media={imageMedia}
+        isUploading={false}
+        uploadProgress={null}
+        error={null}
+        onCancel={jest.fn()}
+        onCancelUpload={jest.fn()}
+        onSend={jest.fn()}
+        onReplace={onReplace}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Remplacer'));
+      await Promise.resolve();
+    });
+    expect(onReplace).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('AttachmentComposerPreview — vidéo et upload', () => {
   it('affiche la progression pendant un upload', async () => {
     await render(
@@ -54,6 +79,7 @@ describe('AttachmentComposerPreview — vidéo et upload', () => {
         onCancel={jest.fn()}
         onCancelUpload={jest.fn()}
         onSend={jest.fn()}
+        onReplace={jest.fn()}
       />,
     );
 
@@ -71,6 +97,7 @@ describe('AttachmentComposerPreview — vidéo et upload', () => {
         onCancel={jest.fn()}
         onCancelUpload={onCancelUpload}
         onSend={jest.fn()}
+        onReplace={jest.fn()}
       />,
     );
 
@@ -92,6 +119,7 @@ describe('AttachmentComposerPreview — vidéo et upload', () => {
         onCancel={jest.fn()}
         onCancelUpload={jest.fn()}
         onSend={onSend}
+        onReplace={jest.fn()}
       />,
     );
 
@@ -113,6 +141,7 @@ describe('AttachmentComposerPreview — vidéo et upload', () => {
         onCancel={jest.fn()}
         onCancelUpload={jest.fn()}
         onSend={jest.fn()}
+        onReplace={jest.fn()}
       />,
     );
 

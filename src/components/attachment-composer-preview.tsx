@@ -17,9 +17,11 @@ type AttachmentComposerPreviewProps = {
   onCancel: () => void;
   onCancelUpload: () => void;
   onSend: () => void;
+  /** Retire le média actuel et rouvre immédiatement le menu trombone (Photo/Vidéo). Sans effet pendant un upload en cours. */
+  onReplace: () => void;
 };
 
-/** Aperçu du média sélectionné (photo ou vidéo) avant envoi, avec Annuler/Envoyer, progression et annulation d'upload. */
+/** Aperçu du média sélectionné (photo ou vidéo) avant envoi, avec Annuler/Remplacer/Envoyer, progression et annulation d'upload. */
 export function AttachmentComposerPreview({
   media,
   isUploading,
@@ -28,6 +30,7 @@ export function AttachmentComposerPreview({
   onCancel,
   onCancelUpload,
   onSend,
+  onReplace,
 }: AttachmentComposerPreviewProps) {
   // Palette sombre imposée (Anomalie 2, build 16) — voir message-bubble.tsx.
   const theme = useTheme('dark');
@@ -58,6 +61,14 @@ export function AttachmentComposerPreview({
           )}
           <View style={styles.buttonsRow}>
             <Button label="Annuler" onPress={onCancel} disabled={isUploading} variant="secondary" size="small" forcedScheme="dark" />
+            <Button
+              label="Remplacer"
+              onPress={onReplace}
+              disabled={isUploading}
+              variant="secondary"
+              size="small"
+              forcedScheme="dark"
+            />
             {/* Un message d'erreur affiché signale une tentative précédente
                 échouée : ce même bouton relance l'envoi (reprise pour une
                 vidéo, nouveau chemin Storage pour une photo), sans jamais

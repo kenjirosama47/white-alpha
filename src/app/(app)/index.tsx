@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppEmptyState } from '@/components/app-empty-state';
 import { AppErrorState } from '@/components/app-error-state';
+import { AppearanceBackground } from '@/components/appearance-background';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { AvatarImage } from '@/components/avatar-image';
 import { Button } from '@/components/button';
@@ -37,7 +38,7 @@ export default function ConversationsScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <AppearanceBackground slot="home" style={styles.container} testID="home-appearance-background">
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.header}>
           <ThemedText type="title">Conversations</ThemedText>
@@ -75,7 +76,7 @@ export default function ConversationsScreen() {
           />
         )}
       </SafeAreaView>
-    </ThemedView>
+    </AppearanceBackground>
   );
 }
 

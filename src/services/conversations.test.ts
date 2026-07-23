@@ -1,12 +1,18 @@
 import { supabase } from '@/lib/supabase';
-import { getConversationForNotification, getOrCreateConversation, listConversations } from '@/services/conversations';
+import {
+  clearConversation,
+  getConversationForNotification,
+  getOrCreateConversation,
+  listConversations,
+} from '@/services/conversations';
 
 jest.mock('@/lib/supabase', () => ({
-  supabase: { rpc: jest.fn(), storage: { from: jest.fn() } },
+  supabase: { rpc: jest.fn(), storage: { from: jest.fn() }, functions: { invoke: jest.fn() } },
 }));
 
 const mockRpc = supabase.rpc as jest.Mock;
 const mockStorageFrom = supabase.storage.from as jest.Mock;
+const mockFunctionsInvoke = supabase.functions.invoke as jest.Mock;
 
 beforeEach(() => {
   mockStorageFrom.mockReturnValue({
@@ -209,5 +215,46 @@ describe('getConversationForNotification', () => {
     const result = await getConversationForNotification('c1');
 
     expect(result).toBeNull();
+  });
+});
+
+// Effacement complet d'une conversation (icône pinceau) : passe par l'Edge
+// Function clear-conversation, jamais par une RPC/DELETE direct côté client
+// (voir supabase/functions/clear-conversation, service_role nécessaire pour
+// nettoyer aussi les fichiers Storage de l'AUTRE participant).
+describe('clearConversation', () => {
+  beforeEach(() => {
+    mockFunctionsInvoke.mockReset();
+  });
+
+  it("appelle l'Edge Function clear-conversation avec le bon conversation_id et retourne le nombre de messages effacés", async () => {
+    mockFunctionsInvoke.mockResolvedValue({ data: { cleared: true, messageCount: 12 }, error: null });
+
+    const count = await clearConversation('conv-1');
+
+    expect(mockFunctionsInvoke).toHaveBeenCalledWith('clear-conversation', {
+      body: { conversation_id: 'conv-1' },
+    });
+    expect(count).toBe(12);
+  });
+
+  it('renvoie 0 pour une conversation déjà vide (idempotent), sans erreur', async () => {
+    mockFunctionsInvoke.mockResolvedValue({ data: { cleared: true, messageCount: 0 }, error: null });
+
+    const count = await clearConversation('conv-empty');
+
+    expect(count).toBe(0);
+  });
+
+  it("lève une erreur générique en français quand l'Edge Function échoue (ex. réseau, 403), sans exposer le détail technique", async () => {
+    mockFunctionsInvoke.mockResolvedValue({ data: null, error: { message: 'Edge Function returned a non-2xx status code' } });
+
+    await expect(clearConversation('conv-1')).rejects.toThrow('Impossible d’effacer la conversation pour le moment.');
+  });
+
+  it('lève une erreur générique quand cleared=false est renvoyé sans error explicite', async () => {
+    mockFunctionsInvoke.mockResolvedValue({ data: { cleared: false, messageCount: 0 }, error: null });
+
+    await expect(clearConversation('conv-1')).rejects.toThrow('Impossible d’effacer la conversation pour le moment.');
   });
 });
