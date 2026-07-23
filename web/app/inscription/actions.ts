@@ -1,6 +1,8 @@
 'use server';
 
 import { logAuthDiagnostic } from '@/lib/auth-diagnostics';
+import { REGISTRATION_CLOSED_COPY } from '@/lib/copy';
+import { PUBLIC_REGISTRATION_ENABLED } from '@/lib/registration-config';
 import { getAuthCallbackUrl } from '@/lib/site-url';
 import { createClient } from '@/lib/supabase/server';
 import { isValidUsername, MIN_PASSWORD_LENGTH, normalizeUsername } from '@/lib/validation';
@@ -34,6 +36,16 @@ const PRIVACY_REQUIRED_ERROR = 'Merci d’accepter la politique de confidentiali
  * rien sur d'autres utilisateurs.
  */
 export async function registerAction(_prevState: RegisterState, formData: FormData): Promise<RegisterState> {
+  // Défense en profondeur (voir `registration-config.ts`) : `RegisterPage`
+  // ne rend déjà plus le formulaire tant que l'inscription publique est
+  // désactivée, mais une Server Action reste un endpoint POST atteignable
+  // directement — jamais une confiance uniquement placée dans l'absence du
+  // formulaire côté client. Vérifié avant toute lecture de `formData` :
+  // aucune trace de la tentative (email, username) n'est journalisée.
+  if (!PUBLIC_REGISTRATION_ENABLED) {
+    return { error: REGISTRATION_CLOSED_COPY.message, submitted: false };
+  }
+
   const username = normalizeUsername(String(formData.get('username') ?? ''));
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');

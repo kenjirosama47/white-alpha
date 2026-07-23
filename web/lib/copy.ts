@@ -36,6 +36,12 @@ export const REGISTER_COPY = {
   title: 'Rejoignez la meute White Alpha',
 } as const;
 
+/** Inscription publique désactivée (voir registration-config.ts, PLAN.md Phase 8). */
+export const REGISTRATION_CLOSED_COPY = {
+  title: 'Inscriptions fermées',
+  message: 'White Alpha est une messagerie privée : les comptes sont créés uniquement par un administrateur.',
+} as const;
+
 export const MEMBER_HOME_COPY = {
   welcomeTitle: 'Bienvenue dans la meute',
   /** Filet de sécurité uniquement (profil non trouvé) — ne devrait jamais s'afficher en pratique, le trigger handle_new_user garantit un profil pour tout compte. */

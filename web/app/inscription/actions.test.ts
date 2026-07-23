@@ -10,6 +10,13 @@ jest.mock('@/lib/supabase/server', () => ({
 jest.mock('@/lib/auth-diagnostics', () => ({
   logAuthDiagnostic: jest.fn(),
 }));
+// Ce fichier teste le comportement du flux d'inscription tel qu'il existait
+// avant la fermeture publique (Phase 8 — voir registration-config.ts) : la
+// bascule réelle (désactivée par défaut) est testée séparément dans
+// actions-registration-closed.test.ts, sans mock de ce module.
+jest.mock('@/lib/registration-config', () => ({
+  PUBLIC_REGISTRATION_ENABLED: true,
+}));
 
 const mockCreateClient = createClient as jest.Mock;
 const mockLogAuthDiagnostic = logAuthDiagnostic as jest.Mock;
