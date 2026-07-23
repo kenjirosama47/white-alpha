@@ -3,6 +3,7 @@ const {
   withMainApplication,
   withDangerousMod,
   withGradleProperties,
+  withAppBuildGradle,
   AndroidConfig,
 } = require('@expo/config-plugins');
 const fs = require('fs');
@@ -52,6 +53,20 @@ const path = require('path');
  *    sécurité runtime de l'app — regroupé ici pour rester dans l'unique
  *    mécanisme `withGradleProperties` déjà en place plutôt que d'ajouter un
  *    second plugin.
+ * 6. android/app/build.gradle : `signingConfigs.release` dédié, pointant
+ *    vers le keystore officiel White Alpha (`credentials/android/keystore.jks`,
+ *    jamais suivi par Git). Corrige un défaut du template Expo constaté en
+ *    audit : `buildTypes.release` signait avec `signingConfigs.debug`,
+ *    produisant un APK « release » en réalité signé avec le certificat de
+ *    débogage générique (`CN=Android Debug`), impossible à distinguer du
+ *    keystore officiel sans exécuter `apksigner`. Les mots de passe
+ *    (`storePassword`, `keyPassword`) ne sont jamais écrits en clair ici :
+ *    ils sont lus uniquement depuis les variables d'environnement
+ *    `WHITEALPHA_RELEASE_STORE_PASSWORD` / `WHITEALPHA_RELEASE_KEY_PASSWORD`
+ *    au moment du build. Si ces variables sont absentes, Gradle échoue
+ *    explicitement à la signature au lieu de retomber silencieusement sur
+ *    `signingConfigs.debug` — aucun chemin ne permet de reproduire l'ancien
+ *    défaut.
  */
 
 const NETWORK_SECURITY_CONFIG_FILENAME = 'network_security_config.xml';
@@ -209,6 +224,83 @@ function withIncreasedBuildMemory(config) {
   });
 }
 
+const RELEASE_SIGNING_MARKER = '// WHITEALPHA_RELEASE_SIGNING (correctif signature officielle)';
+const RELEASE_KEYSTORE_RELATIVE_PATH = '../credentials/android/keystore.jks';
+const RELEASE_STORE_PASSWORD_ENV = 'WHITEALPHA_RELEASE_STORE_PASSWORD';
+const RELEASE_KEY_ALIAS_ENV = 'WHITEALPHA_RELEASE_KEY_ALIAS';
+const RELEASE_KEY_PASSWORD_ENV = 'WHITEALPHA_RELEASE_KEY_PASSWORD';
+
+const DEBUG_SIGNING_CONFIG_BLOCK = `    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }`;
+
+const DEBUG_SIGNING_CONFIG_BLOCK_WITH_RELEASE = `    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        release {
+            ${RELEASE_SIGNING_MARKER}
+            storeFile rootProject.file('${RELEASE_KEYSTORE_RELATIVE_PATH}')
+            storePassword System.getenv('${RELEASE_STORE_PASSWORD_ENV}')
+            keyAlias System.getenv('${RELEASE_KEY_ALIAS_ENV}')
+            keyPassword System.getenv('${RELEASE_KEY_PASSWORD_ENV}')
+        }
+    }`;
+
+const RELEASE_BUILD_TYPE_SIGNING_ANCHOR = `        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug`;
+
+const RELEASE_BUILD_TYPE_SIGNING_PATCHED = `        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.release`;
+
+/**
+ * Mutation pure (testable sans exécuter de prebuild) sur le texte de
+ * `android/app/build.gradle`. Idempotente : un second appel sur un contenu
+ * déjà patché (détecté via `RELEASE_SIGNING_MARKER`) ne fait rien. Échoue
+ * bruyamment si le template Expo attendu (ancres textuelles ci-dessus) ne
+ * correspond plus, plutôt que de produire silencieusement un
+ * `signingConfigs.release` mal branché.
+ */
+function setReleaseSigningConfig(contents) {
+  if (contents.includes(RELEASE_SIGNING_MARKER)) {
+    return contents;
+  }
+
+  if (!contents.includes(DEBUG_SIGNING_CONFIG_BLOCK)) {
+    throw new Error(
+      'withAndroidHardening: bloc signingConfigs par défaut introuvable dans build.gradle généré — le template Expo a changé, mettre à jour plugins/withAndroidHardening.js.',
+    );
+  }
+  if (!contents.includes(RELEASE_BUILD_TYPE_SIGNING_ANCHOR)) {
+    throw new Error(
+      'withAndroidHardening: bloc buildTypes.release par défaut introuvable dans build.gradle généré — le template Expo a changé, mettre à jour plugins/withAndroidHardening.js.',
+    );
+  }
+
+  let patched = contents.replace(DEBUG_SIGNING_CONFIG_BLOCK, DEBUG_SIGNING_CONFIG_BLOCK_WITH_RELEASE);
+  patched = patched.replace(RELEASE_BUILD_TYPE_SIGNING_ANCHOR, RELEASE_BUILD_TYPE_SIGNING_PATCHED);
+  return patched;
+}
+
+function withReleaseSigningConfig(config) {
+  return withAppBuildGradle(config, (config) => {
+    config.modResults.contents = setReleaseSigningConfig(config.modResults.contents);
+    return config;
+  });
+}
+
 function withMainApplicationFlagSecure(config) {
   return withMainApplication(config, (config) => {
     let { contents } = config.modResults;
@@ -239,6 +331,7 @@ function withAndroidHardening(config) {
   config = withMainApplicationFlagSecure(config);
   config = withGlideLoggingDisabled(config);
   config = withIncreasedBuildMemory(config);
+  config = withReleaseSigningConfig(config);
   return config;
 }
 
@@ -255,3 +348,11 @@ module.exports.JVM_ARGS_PROPERTY_VALUE = JVM_ARGS_PROPERTY_VALUE;
 module.exports.NETWORK_SECURITY_CONFIG_XML = NETWORK_SECURITY_CONFIG_XML;
 module.exports.FLAG_SECURE_MARKER = FLAG_SECURE_MARKER;
 module.exports.FLAG_SECURE_BLOCK = FLAG_SECURE_BLOCK;
+module.exports.setReleaseSigningConfig = setReleaseSigningConfig;
+module.exports.RELEASE_SIGNING_MARKER = RELEASE_SIGNING_MARKER;
+module.exports.RELEASE_KEYSTORE_RELATIVE_PATH = RELEASE_KEYSTORE_RELATIVE_PATH;
+module.exports.RELEASE_STORE_PASSWORD_ENV = RELEASE_STORE_PASSWORD_ENV;
+module.exports.RELEASE_KEY_ALIAS_ENV = RELEASE_KEY_ALIAS_ENV;
+module.exports.RELEASE_KEY_PASSWORD_ENV = RELEASE_KEY_PASSWORD_ENV;
+module.exports.DEBUG_SIGNING_CONFIG_BLOCK = DEBUG_SIGNING_CONFIG_BLOCK;
+module.exports.RELEASE_BUILD_TYPE_SIGNING_ANCHOR = RELEASE_BUILD_TYPE_SIGNING_ANCHOR;

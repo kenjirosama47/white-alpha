@@ -16,8 +16,8 @@ describe('app.json — configuration Android', () => {
     expect(appJson.expo.android.package).toBe('com.kenjiro.whitealpha');
   });
 
-  it('le versionCode reflète le build en attente de validation Android (correctif avatars/discussion, build 17)', () => {
-    expect(appJson.expo.android.versionCode).toBe(17);
+  it('le versionCode reflète le build en attente de validation Android (signature officielle rétablie, build 18)', () => {
+    expect(appJson.expo.android.versionCode).toBe(18);
   });
 
   it('bloque READ_MEDIA_IMAGES (permission de détection introduite par expo-screen-capture, non utilisée)', () => {

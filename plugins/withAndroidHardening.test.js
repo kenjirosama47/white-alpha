@@ -8,6 +8,14 @@ const {
   NETWORK_SECURITY_CONFIG_XML,
   FLAG_SECURE_MARKER,
   FLAG_SECURE_BLOCK,
+  setReleaseSigningConfig,
+  RELEASE_SIGNING_MARKER,
+  RELEASE_KEYSTORE_RELATIVE_PATH,
+  RELEASE_STORE_PASSWORD_ENV,
+  RELEASE_KEY_ALIAS_ENV,
+  RELEASE_KEY_PASSWORD_ENV,
+  DEBUG_SIGNING_CONFIG_BLOCK,
+  RELEASE_BUILD_TYPE_SIGNING_ANCHOR,
 } = require('./withAndroidHardening');
 const appJson = require('../app.json');
 
@@ -98,6 +106,75 @@ describe('withAndroidHardening — org.gradle.jvmargs (Phase 10.5a)', () => {
 
     const matches = properties.filter((item) => item.type === 'property' && item.key === JVM_ARGS_PROPERTY_KEY);
     expect(matches).toHaveLength(1);
+  });
+});
+
+// Correctif signature officielle : le template Expo par défaut signe
+// buildTypes.release avec signingConfigs.debug (constaté par audit
+// apksigner : certificat "CN=Android Debug" sur l'APK release). Ces tests
+// verrouillent la mutation texte de build.gradle sans exécuter de prebuild.
+describe('withAndroidHardening — signingConfigs.release officiel', () => {
+  const FAKE_BUILD_GRADLE = `
+    defaultConfig {
+        applicationId 'com.kenjiro.whitealpha'
+    }
+${DEBUG_SIGNING_CONFIG_BLOCK}
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+${RELEASE_BUILD_TYPE_SIGNING_ANCHOR}
+            shrinkResources true
+            minifyEnabled true
+        }
+    }
+`;
+
+  it('ajoute un bloc signingConfigs.release pointant vers le keystore officiel', () => {
+    const result = setReleaseSigningConfig(FAKE_BUILD_GRADLE);
+
+    expect(result).toContain(`storeFile rootProject.file('${RELEASE_KEYSTORE_RELATIVE_PATH}')`);
+    expect(result).toContain(`System.getenv('${RELEASE_STORE_PASSWORD_ENV}')`);
+    expect(result).toContain(`System.getenv('${RELEASE_KEY_ALIAS_ENV}')`);
+    expect(result).toContain(`System.getenv('${RELEASE_KEY_PASSWORD_ENV}')`);
+  });
+
+  it('ne contient jamais de mot de passe en clair, uniquement des lectures System.getenv', () => {
+    const result = setReleaseSigningConfig(FAKE_BUILD_GRADLE);
+    const releaseBlock = result.slice(result.indexOf('release {', result.indexOf('signingConfigs')));
+
+    expect(releaseBlock).not.toMatch(/storePassword\s+'[^']*'/);
+    expect(releaseBlock).not.toMatch(/keyPassword\s+'[^']*'/);
+  });
+
+  it('fait pointer buildTypes.release sur signingConfigs.release, jamais signingConfigs.debug', () => {
+    const result = setReleaseSigningConfig(FAKE_BUILD_GRADLE);
+    const releaseBuildType = result.slice(result.lastIndexOf('release {'));
+
+    expect(releaseBuildType).toContain('signingConfig signingConfigs.release');
+    expect(releaseBuildType).not.toContain('signingConfig signingConfigs.debug');
+  });
+
+  it('laisse buildTypes.debug inchangé (toujours signingConfigs.debug)', () => {
+    const result = setReleaseSigningConfig(FAKE_BUILD_GRADLE);
+
+    expect(result).toMatch(/debug \{\s*signingConfig signingConfigs\.debug\s*\}/);
+  });
+
+  it('est idempotent : un second appel ne duplique pas le bloc release', () => {
+    const once = setReleaseSigningConfig(FAKE_BUILD_GRADLE);
+    const twice = setReleaseSigningConfig(once);
+
+    expect(twice).toBe(once);
+    expect(twice.match(/release \{/g)).toHaveLength(2); // signingConfigs.release + buildTypes.release
+  });
+
+  it('échoue bruyamment si le template Expo attendu a changé (pas de bloc debug reconnu)', () => {
+    expect(() => setReleaseSigningConfig('signingConfigs { }')).toThrow(/signingConfigs par défaut introuvable/);
+  });
+
+  it('le marqueur identifie bien le correctif de signature officielle', () => {
+    expect(RELEASE_SIGNING_MARKER).toContain('RELEASE_SIGNING');
   });
 });
 
