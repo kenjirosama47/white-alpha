@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Alert } from 'react-native';
 import { FadeIn } from 'react-native-reanimated';
 
-import ConversationScreen from '@/app/(app)/conversation/[id]';
+import ConversationScreen, { getConversationKeyboardAvoidingBehavior } from '@/app/(app)/conversation/[id]';
 import { clearConversation } from '@/services/conversations';
 import type { Message } from '@/types/chat';
 
@@ -411,6 +411,105 @@ describe("ConversationScreen — en-tête (Anomalie 1/2, build 16)", () => {
       expect(screen.getByLabelText('Avatar loup de Bob')).toBeTruthy();
     },
   );
+});
+
+// Correctif build 20 (A1/A2) : les icônes trombone/pinceau étaient des
+// emoji rendus via ThemedText, agrandis jusqu'à ×2 par maxFontSizeMultiplier
+// (accessibilité), sans hauteur plafonnée sur les barres qui les contiennent
+// — masquant le trombone sous le clavier et gonflant l'en-tête. Ces tests
+// verrouillent le remplacement par de vraies icônes vectorielles à taille
+// fixe (@expo/vector-icons), insensibles à la taille de police système.
+// Placé avant le describe "effacer la conversation" ci-dessous : sa
+// dernière suite (double-appel avec promesse différée résolue en fin de
+// test) laisse une mise à jour d'état asynchrone traverser dans le test
+// suivant si celui-ci est monté juste après, faisant échouer des requêtes
+// getByLabelText/getByTestId pourtant correctes (pollution entre tests,
+// préexistante à ce correctif, contournée ici par l'ordre plutôt que par
+// une modification de la logique d'effacement elle-même).
+describe('ConversationScreen — icônes vectorielles à taille fixe (correctif A1/A2, build 20)', () => {
+  beforeEach(() => {
+    mockPickedMedia = null;
+    mockMediaError = null;
+    mockUploadProgress = null;
+    mockIsUploadingMedia = false;
+  });
+
+  it("l'icône trombone est une vraie icône vectorielle (paperclip), pas un emoji texte redimensionnable", async () => {
+    await render(<ConversationScreen />);
+
+    // @expo/vector-icons rend en interne un Text hôte : allowFontScaling
+    // (défaut false dans la bibliothèque elle-même, explicité ici) et size
+    // (-> fontSize) s'y retrouvent directement.
+    const icon = screen.getByTestId('attachment-icon');
+    expect(icon.props.allowFontScaling).toBe(false);
+    const flatStyle = Object.assign({}, ...[icon.props.style].flat());
+    expect(flatStyle.fontSize).toBe(24);
+  });
+
+  it("l'icône pinceau est une vraie icône vectorielle (brush), pas un emoji texte redimensionnable", async () => {
+    await render(<ConversationScreen />);
+
+    const icon = screen.getByTestId('clear-conversation-icon');
+    expect(icon.props.allowFontScaling).toBe(false);
+    const flatStyle = Object.assign({}, ...[icon.props.style].flat());
+    expect(flatStyle.fontSize).toBe(22);
+  });
+
+  it('le trombone conserve une zone tactile fixe d’au moins 44×44, indépendante du contenu', async () => {
+    await render(<ConversationScreen />);
+
+    const button = screen.getByLabelText('Ajouter une pièce jointe');
+    const flatStyle = Object.assign({}, ...[button.props.style].flat());
+    expect(flatStyle.width).toBeGreaterThanOrEqual(44);
+    expect(flatStyle.minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  it('le pinceau conserve une zone tactile fixe d’au moins 44×44, indépendante du contenu', async () => {
+    await render(<ConversationScreen />);
+
+    const button = screen.getByLabelText('Effacer la conversation');
+    const flatStyle = Object.assign({}, ...[button.props.style].flat());
+    expect(flatStyle.width).toBeGreaterThanOrEqual(44);
+    expect(flatStyle.minHeight).toBeGreaterThanOrEqual(44);
+  });
+});
+
+// Correctif A1 (build 21) : `behavior="height"` sur Android était cumulé à
+// `android:windowSoftInputMode="adjustResize"` (déjà correct, non modifié),
+// provoquant un double redimensionnement qui masquait le trombone à
+// l'ouverture du clavier (test réel, appareil physique, police système
+// agrandie). Ces tests verrouillent la logique par plateforme et la
+// présence continue du composeur/trombone.
+describe('ConversationScreen — KeyboardAvoidingView par plateforme (correctif A1, build 21)', () => {
+  it("behavior='padding' sur iOS", () => {
+    expect(getConversationKeyboardAvoidingBehavior('ios')).toBe('padding');
+  });
+
+  it('behavior absent (undefined) sur Android — seul adjustResize gère le clavier', () => {
+    expect(getConversationKeyboardAvoidingBehavior('android')).toBeUndefined();
+  });
+
+  it('behavior absent (undefined) sur toute autre plateforme (web, etc.)', () => {
+    expect(getConversationKeyboardAvoidingBehavior('web')).toBeUndefined();
+  });
+
+  it('le trombone est bien rendu dans le composeur', async () => {
+    await render(<ConversationScreen />);
+
+    expect(screen.getByLabelText('Ajouter une pièce jointe')).toBeTruthy();
+  });
+
+  it('le composeur (trombone, champ de texte, bouton d’envoi) reste présent après un changement de contenu simulant l’ouverture du clavier', async () => {
+    await render(<ConversationScreen />);
+
+    const input = screen.getByPlaceholderText('Écrire un message...');
+    fireEvent(input, 'focus');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Ajouter une pièce jointe')).toBeTruthy();
+      expect(screen.getByPlaceholderText('Écrire un message...')).toBeTruthy();
+      expect(screen.getByLabelText('Envoyer le message')).toBeTruthy();
+    });
+  });
 });
 
 describe('ConversationScreen — effacer la conversation (icône pinceau)', () => {

@@ -1,11 +1,16 @@
 import { act, renderHook } from '@testing-library/react-native';
 
 import { useAvatarPreset } from '@/hooks/use-avatar-preset';
+import { removeAvatarFile } from '@/services/avatars';
 import { updateMyAvatarPreset } from '@/services/profiles';
 import type { MyProfile } from '@/services/profiles';
 
 jest.mock('@/services/profiles', () => ({
   updateMyAvatarPreset: jest.fn(),
+}));
+
+jest.mock('@/services/avatars', () => ({
+  removeAvatarFile: jest.fn(),
 }));
 
 const baseProfile: MyProfile = {
@@ -81,7 +86,7 @@ describe('useAvatarPreset', () => {
   });
 
   it('save() réussi : appelle la RPC, montre le succès, et appelle onSaved avec le nouvel avatar', async () => {
-    (updateMyAvatarPreset as jest.Mock).mockResolvedValue('wolf_grey');
+    (updateMyAvatarPreset as jest.Mock).mockResolvedValue({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
     const onSaved = jest.fn();
     const { result } = await renderHook(() => useAvatarPreset(baseProfile, onSaved));
 
@@ -94,7 +99,46 @@ describe('useAvatarPreset', () => {
     expect(saved).toBe(true);
     expect(updateMyAvatarPreset).toHaveBeenCalledWith('wolf_grey');
     expect(result.current.success).toBe(true);
-    expect(onSaved).toHaveBeenCalledWith({ ...baseProfile, avatarPreset: 'wolf_grey' });
+    expect(onSaved).toHaveBeenCalledWith({ ...baseProfile, avatarPreset: 'wolf_grey', avatarUrl: null, avatarPath: null });
+  });
+
+  it('save() réussi alors qu’une photo personnelle existait : efface avatarUrl/avatarPath localement et nettoie le fichier Storage orphelin', async () => {
+    (updateMyAvatarPreset as jest.Mock).mockResolvedValue({
+      avatarPreset: 'wolf_grey',
+      previousAvatarPath: 'me/old-photo.jpg',
+    });
+    const onSaved = jest.fn();
+    const profileWithPhoto: MyProfile = {
+      ...baseProfile,
+      avatarUrl: 'https://cdn.test/avatars/me/old-photo.jpg',
+      avatarPath: 'me/old-photo.jpg',
+    };
+    const { result } = await renderHook(() => useAvatarPreset(profileWithPhoto, onSaved));
+
+    await run(() => result.current.select('wolf_grey'));
+    await run(async () => {
+      await result.current.save();
+    });
+
+    expect(onSaved).toHaveBeenCalledWith({
+      ...profileWithPhoto,
+      avatarPreset: 'wolf_grey',
+      avatarUrl: null,
+      avatarPath: null,
+    });
+    expect(removeAvatarFile).toHaveBeenCalledWith('me/old-photo.jpg');
+  });
+
+  it("save() réussi sans photo personnelle préalable : n'appelle jamais removeAvatarFile", async () => {
+    (updateMyAvatarPreset as jest.Mock).mockResolvedValue({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
+    const { result } = await renderHook(() => useAvatarPreset(baseProfile, jest.fn()));
+
+    await run(() => result.current.select('wolf_grey'));
+    await run(async () => {
+      await result.current.save();
+    });
+
+    expect(removeAvatarFile).not.toHaveBeenCalled();
   });
 
   it("save() échoué : affiche l'erreur française, n'appelle jamais onSaved (ancien avatar conservé ailleurs dans l'app)", async () => {
@@ -114,7 +158,7 @@ describe('useAvatarPreset', () => {
   });
 
   it('bloque le double-clic : un second save() pendant que le premier est en cours ne relance pas la RPC', async () => {
-    let resolveUpdate: (value: string) => void = () => {};
+    let resolveUpdate: (value: { avatarPreset: string; previousAvatarPath: string | null }) => void = () => {};
     (updateMyAvatarPreset as jest.Mock).mockReturnValue(
       new Promise((resolve) => {
         resolveUpdate = resolve;
@@ -135,7 +179,7 @@ describe('useAvatarPreset', () => {
     expect(updateMyAvatarPreset).toHaveBeenCalledTimes(1);
 
     await run(async () => {
-      resolveUpdate('wolf_grey');
+      resolveUpdate({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
       await firstCallPromise;
     });
   });

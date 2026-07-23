@@ -67,6 +67,18 @@ const path = require('path');
  *    explicitement à la signature au lieu de retomber silencieusement sur
  *    `signingConfigs.debug` — aucun chemin ne permet de reproduire l'ancien
  *    défaut.
+ * 7. gradle.properties : `android.enableMinifyInReleaseBuilds=true` et
+ *    `android.enableShrinkResourcesInReleaseBuilds=true`. Audit du build 19 :
+ *    ces deux propriétés valent `false` par défaut dans le template Expo
+ *    (`android/app/build.gradle` les lit via `findProperty(...) ?: false`),
+ *    et n'étaient écrites nulle part dans ce dépôt — aucun `mapping.txt` R8
+ *    n'était généré, alors que `SECURITY.md` et les rapports de validation
+ *    précédents (builds 14-17) documentaient R8/shrinkResources comme
+ *    actifs. Très probablement activées à la main dans un worktree
+ *    temporaire pour ces builds (même classe de défaut que le volet 6 :
+ *    signingConfigs.release), jamais portées dans ce plugin reproductible.
+ *    Forcées ici pour que chaque `expo prebuild` régénère un build réellement
+ *    minifié/réduit, sans dépendre d'un réglage manuel oublié.
  */
 
 const NETWORK_SECURITY_CONFIG_FILENAME = 'network_security_config.xml';
@@ -224,6 +236,63 @@ function withIncreasedBuildMemory(config) {
   });
 }
 
+const MINIFY_PROPERTY_KEY = 'android.enableMinifyInReleaseBuilds';
+const MINIFY_PROPERTY_VALUE = 'true';
+const SHRINK_RESOURCES_PROPERTY_KEY = 'android.enableShrinkResourcesInReleaseBuilds';
+const SHRINK_RESOURCES_PROPERTY_VALUE = 'true';
+
+/**
+ * Mutation pure (testable sans exécuter de prebuild) : force
+ * `android.enableMinifyInReleaseBuilds=true`. Même logique d'idempotence que
+ * `setGlideLoggingDisabled` ci-dessus.
+ */
+function setReleaseMinificationEnabled(gradleProperties) {
+  const existingIndex = gradleProperties.findIndex(
+    (item) => item.type === 'property' && item.key === MINIFY_PROPERTY_KEY,
+  );
+
+  if (existingIndex >= 0) {
+    gradleProperties[existingIndex] = { ...gradleProperties[existingIndex], value: MINIFY_PROPERTY_VALUE };
+  } else {
+    gradleProperties.push({ type: 'property', key: MINIFY_PROPERTY_KEY, value: MINIFY_PROPERTY_VALUE });
+  }
+
+  return gradleProperties;
+}
+
+/**
+ * Mutation pure (testable sans exécuter de prebuild) : force
+ * `android.enableShrinkResourcesInReleaseBuilds=true`. Même logique
+ * d'idempotence que `setGlideLoggingDisabled` ci-dessus.
+ */
+function setReleaseShrinkResourcesEnabled(gradleProperties) {
+  const existingIndex = gradleProperties.findIndex(
+    (item) => item.type === 'property' && item.key === SHRINK_RESOURCES_PROPERTY_KEY,
+  );
+
+  if (existingIndex >= 0) {
+    gradleProperties[existingIndex] = { ...gradleProperties[existingIndex], value: SHRINK_RESOURCES_PROPERTY_VALUE };
+  } else {
+    gradleProperties.push({ type: 'property', key: SHRINK_RESOURCES_PROPERTY_KEY, value: SHRINK_RESOURCES_PROPERTY_VALUE });
+  }
+
+  return gradleProperties;
+}
+
+function withReleaseMinificationEnabled(config) {
+  return withGradleProperties(config, (config) => {
+    config.modResults = setReleaseMinificationEnabled(config.modResults);
+    return config;
+  });
+}
+
+function withReleaseShrinkResourcesEnabled(config) {
+  return withGradleProperties(config, (config) => {
+    config.modResults = setReleaseShrinkResourcesEnabled(config.modResults);
+    return config;
+  });
+}
+
 const RELEASE_SIGNING_MARKER = '// WHITEALPHA_RELEASE_SIGNING (correctif signature officielle)';
 const RELEASE_KEYSTORE_RELATIVE_PATH = '../credentials/android/keystore.jks';
 const RELEASE_STORE_PASSWORD_ENV = 'WHITEALPHA_RELEASE_STORE_PASSWORD';
@@ -332,6 +401,8 @@ function withAndroidHardening(config) {
   config = withGlideLoggingDisabled(config);
   config = withIncreasedBuildMemory(config);
   config = withReleaseSigningConfig(config);
+  config = withReleaseMinificationEnabled(config);
+  config = withReleaseShrinkResourcesEnabled(config);
   return config;
 }
 
@@ -356,3 +427,9 @@ module.exports.RELEASE_KEY_ALIAS_ENV = RELEASE_KEY_ALIAS_ENV;
 module.exports.RELEASE_KEY_PASSWORD_ENV = RELEASE_KEY_PASSWORD_ENV;
 module.exports.DEBUG_SIGNING_CONFIG_BLOCK = DEBUG_SIGNING_CONFIG_BLOCK;
 module.exports.RELEASE_BUILD_TYPE_SIGNING_ANCHOR = RELEASE_BUILD_TYPE_SIGNING_ANCHOR;
+module.exports.setReleaseMinificationEnabled = setReleaseMinificationEnabled;
+module.exports.MINIFY_PROPERTY_KEY = MINIFY_PROPERTY_KEY;
+module.exports.MINIFY_PROPERTY_VALUE = MINIFY_PROPERTY_VALUE;
+module.exports.setReleaseShrinkResourcesEnabled = setReleaseShrinkResourcesEnabled;
+module.exports.SHRINK_RESOURCES_PROPERTY_KEY = SHRINK_RESOURCES_PROPERTY_KEY;
+module.exports.SHRINK_RESOURCES_PROPERTY_VALUE = SHRINK_RESOURCES_PROPERTY_VALUE;

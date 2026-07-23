@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import type { WolfAvatarId } from '@/constants/avatars';
+import { removeAvatarFile } from '@/services/avatars';
 import { updateMyAvatarPreset, type MyProfile } from '@/services/profiles';
 
 type UseAvatarPresetResult = {
@@ -59,9 +60,20 @@ export function useAvatarPreset(profile: MyProfile, onSaved: (profile: MyProfile
     setSuccess(false);
 
     try {
-      const updatedPreset = await updateMyAvatarPreset(selected);
+      const result = await updateMyAvatarPreset(selected);
       setSuccess(true);
-      onSaved({ ...profile, avatarPreset: updatedPreset });
+      // Choisir un préréglage remplace toute photo personnelle existante
+      // (voir migration 20260723170000) : avatarUrl/avatarPath doivent donc
+      // être effacés localement aussi, sinon AvatarImage continuerait
+      // d'afficher l'ancienne photo (priorité à avatarUrl) jusqu'au
+      // prochain rechargement complet du profil.
+      onSaved({ ...profile, avatarPreset: result.avatarPreset, avatarUrl: null, avatarPath: null });
+      // Nettoyage best-effort de l'ancien fichier Storage, seulement après
+      // le succès complet de la RPC — même politique que
+      // use-profile-editor.ts (jamais avant, jamais bloquant pour l'UI).
+      if (result.previousAvatarPath) {
+        await removeAvatarFile(result.previousAvatarPath);
+      }
       return true;
     } catch (err) {
       // Échec : `onSaved` n'est jamais appelé, donc le profil affiché

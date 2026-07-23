@@ -128,4 +128,35 @@ describe('useTheme (Phase 10.2 — branchement des préférences d’apparence)'
 
     expect(result.current.preferences).toEqual(preferences);
   });
+
+  // Correctif A4 (voile de lisibilité d'AppearanceBackground) : `scheme`
+  // expose la palette EFFECTIVEMENT appliquée (système/forcedScheme/préférence),
+  // pas seulement `preferences.themeMode` brut — nécessaire pour distinguer
+  // un voile clair d'un voile sombre déjà avant tout accès aux couleurs.
+  it("expose scheme='light' quand la palette effective est claire (système)", async () => {
+    mockUseColorScheme.mockReturnValue('light');
+    const preferences = { ...DEFAULT_APPEARANCE_PREFERENCES, themeMode: 'system' as const };
+
+    const { result } = await renderHook(() => useTheme(), { wrapper: wrapperWithPreferences(preferences) });
+
+    expect(result.current.scheme).toBe('light');
+  });
+
+  it("expose scheme='dark' quand la palette effective est sombre (système)", async () => {
+    mockUseColorScheme.mockReturnValue('dark');
+    const preferences = { ...DEFAULT_APPEARANCE_PREFERENCES, themeMode: 'system' as const };
+
+    const { result } = await renderHook(() => useTheme(), { wrapper: wrapperWithPreferences(preferences) });
+
+    expect(result.current.scheme).toBe('dark');
+  });
+
+  it("expose scheme='dark' quand forcedScheme='dark', même si le système et la préférence sont clairs", async () => {
+    mockUseColorScheme.mockReturnValue('light');
+    const preferences = { ...DEFAULT_APPEARANCE_PREFERENCES, themeMode: 'light' as const };
+
+    const { result } = await renderHook(() => useTheme('dark'), { wrapper: wrapperWithPreferences(preferences) });
+
+    expect(result.current.scheme).toBe('dark');
+  });
 });

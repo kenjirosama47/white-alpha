@@ -29,6 +29,8 @@ export type Theme = Record<ThemeColor, string> & {
   textScale: number;
   /** Préférences complètes ayant produit ce thème (Phase 10.2) — réservées à un futur écran Apparence (Phase 10.3+), aucun autre appelant ne doit en dépendre. */
   preferences: AppearancePreferences;
+  /** Palette effectivement appliquée (système, `forcedScheme` ou préférence), pas la palette utilisateur brute — voir `AppearanceBackground` (correctif A4) qui en dépend pour adapter son voile de lisibilité. */
+  scheme: 'light' | 'dark';
 };
 
 /**
@@ -66,5 +68,6 @@ export function useTheme(forcedScheme?: 'light' | 'dark'): Theme {
     bubbleReceivedColor: preferences.bubbleReceivedColor,
     textScale: preferences.textScale,
     preferences,
+    scheme,
   };
 }

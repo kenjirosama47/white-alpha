@@ -238,3 +238,29 @@ describe('MessageBubble — Design System sombre imposé (Anomalie 2, build 16)'
     expect(flattenStyle(bubble?.props.style).backgroundColor).toBe(Colors.dark.surfaceHigh);
   });
 });
+
+// Correctif A3 (build 20) : un rectangle sombre était perçu autour des
+// bulles sur fond personnalisé. Diagnostic : ni MessageBubble ni ses
+// conteneurs (row/column) ne posent de backgroundColor propre — seule la
+// bulle elle-même en a un, par design. Le rectangle provenait du voile de
+// lisibilité d'AppearanceBackground, visible dans les interstices de la
+// FlatList (corrigé par l'opacité adaptative du correctif A4). Ce test
+// verrouille l'absence de tout fond opaque parent qui referait apparaître
+// un tel rectangle à l'avenir.
+describe('MessageBubble — non-régression A3 : aucun fond opaque parent autour de la bulle', () => {
+  it("le conteneur de la ligne (row) n'a pas de backgroundColor propre", async () => {
+    await render(<MessageBubble message={textMessage} isOwnMessage onDelete={jest.fn()} onRetryDelete={jest.fn()} />);
+
+    const bubble = screen.getByText('Salut').parent;
+    const row = bubble?.parent?.parent; // bubble -> column -> row
+    expect(flattenStyle(row?.props.style).backgroundColor).toBeUndefined();
+  });
+
+  it("le conteneur de la colonne (column) n'a pas de backgroundColor propre", async () => {
+    await render(<MessageBubble message={textMessage} isOwnMessage={false} onDelete={jest.fn()} onRetryDelete={jest.fn()} />);
+
+    const bubble = screen.getByText('Salut').parent;
+    const column = bubble?.parent; // bubble -> column
+    expect(flattenStyle(column?.props.style).backgroundColor).toBeUndefined();
+  });
+});

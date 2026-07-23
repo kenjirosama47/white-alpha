@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -38,6 +39,20 @@ import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTheme } from '@/hooks/use-theme';
 import { MESSAGE_MAX_LENGTH } from '@/types/chat';
 import { isSameLocalDay, formatDateSeparator } from '@/utils/datetime';
+
+/**
+ * Correctif A1 (build 21) : extrait en fonction pure et exportée pour être
+ * testable directement (RNTL v14 ne permet plus d'inspecter les props
+ * internes de `KeyboardAvoidingView`). `undefined` sur Android : seul
+ * `android:windowSoftInputMode="adjustResize"` (AndroidManifest.xml, déjà
+ * correct) gère le clavier — `behavior="height"` combiné à `adjustResize`
+ * provoquait un double redimensionnement qui masquait le trombone à
+ * l'ouverture du clavier (voir commentaire au-dessus du KeyboardAvoidingView
+ * ci-dessous).
+ */
+export function getConversationKeyboardAvoidingBehavior(platformOS: string): 'padding' | undefined {
+  return platformOS === 'ios' ? 'padding' : undefined;
+}
 
 export default function ConversationScreen() {
   const { id, otherDisplayName, otherAvatarUrl, otherAvatarPreset } = useLocalSearchParams<{
@@ -181,9 +196,7 @@ export default function ConversationScreen() {
             accessibilityRole="button"
             accessibilityLabel="Effacer la conversation"
             accessibilityState={{ disabled: isClearingConversation }}>
-            <ThemedText type="body" forcedScheme="dark" style={styles.clearIcon}>
-              🖌️
-            </ThemedText>
+            <MaterialCommunityIcons testID="clear-conversation-icon" name="brush" size={22} color={theme.text} allowFontScaling={false} />
           </Pressable>
         </ThemedView>
         {clearConversationError && (
@@ -200,10 +213,18 @@ export default function ConversationScreen() {
         {/* L'en-tête reste au-dessus, hors du KeyboardAvoidingView, donc
             jamais déplacé par le clavier. Seuls la liste et le composer se
             partagent l'espace restant et remontent au-dessus du clavier.
-            keyboardVerticalOffset=0 : rien d'autre ne chevauche cette zone. */}
+            keyboardVerticalOffset=0 : rien d'autre ne chevauche cette zone.
+            Correctif A1 (build 21) : `behavior="height"` sur Android était
+            cumulé à `android:windowSoftInputMode="adjustResize"` (déjà
+            correct dans AndroidManifest.xml, non modifié) — les deux
+            mécanismes redimensionnaient la zone en même temps, écrasant le
+            composeur au point de masquer le trombone à l'ouverture du
+            clavier (test réel, appareil physique, police système agrandie).
+            `undefined` sur Android : seul `adjustResize` gère le clavier,
+            comme documenté officiellement pour ce cas précis. */}
         <KeyboardAvoidingView
           style={styles.keyboardAvoiding}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={getConversationKeyboardAvoidingBehavior(Platform.OS)}
           keyboardVerticalOffset={0}>
           {isLoading ? (
             <AppLoadingState accessibilityLabel="Chargement des messages" forcedScheme="dark" />
@@ -315,9 +336,7 @@ export default function ConversationScreen() {
               accessibilityRole="button"
               accessibilityLabel="Ajouter une pièce jointe"
               accessibilityState={{ disabled: !!pickedMedia || isUploadingMedia }}>
-              <ThemedText type="body" forcedScheme="dark" style={styles.attachmentIcon}>
-                📎
-              </ThemedText>
+              <MaterialCommunityIcons testID="attachment-icon" name="paperclip" size={24} color={theme.text} allowFontScaling={false} />
             </Pressable>
             <AttachmentMenu
               visible={attachmentMenuVisible}
@@ -374,6 +393,11 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    // Correctif A2 (build 20) : hauteur plancher stable, indépendante du
+    // contenu — avant le passage aux icônes vectorielles à taille fixe
+    // (volet 1), un glyphe emoji agrandi par la taille de police système
+    // étirait cette barre bien au-delà de sa hauteur voulue.
+    minHeight: TouchTarget.comfortable + Spacing.two * 2,
   },
   headerIdentity: {
     flex: 1,
@@ -387,11 +411,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerSpacer: {
-    width: 50,
+    width: TouchTarget.min,
+    minHeight: TouchTarget.min,
     alignItems: 'flex-end',
-  },
-  clearIcon: {
-    fontSize: 20,
+    justifyContent: 'center',
   },
   keyboardAvoiding: {
     flex: 1,
@@ -421,15 +444,17 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
+    // Correctif A1 (build 20) : hauteur plancher stable — même raison que
+    // `header` ci-dessus. Le trombone reste garanti visible/cliquable au
+    // lieu d'être écrasé par une ligne qui rétrécirait sous sa taille
+    // minimale voulue.
+    minHeight: TouchTarget.min + Spacing.two * 2,
   },
   attachmentButton: {
     width: TouchTarget.min,
     minHeight: TouchTarget.min,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  attachmentIcon: {
-    fontSize: 22,
   },
   pressed: {
     opacity: 0.6,

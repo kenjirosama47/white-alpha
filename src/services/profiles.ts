@@ -160,14 +160,30 @@ export async function updateMyProfile(
   };
 }
 
+export type AvatarPresetUpdateResult = {
+  avatarPreset: WolfAvatarId;
+  /**
+   * Chemin Storage de l'ancienne photo personnelle, si l'utilisateur en
+   * avait une avant cet appel — à passer à `removeAvatarFile` (best-effort)
+   * pour ne pas laisser de fichier orphelin. `null` s'il n'y en avait pas.
+   */
+  previousAvatarPath: string | null;
+};
+
 /**
  * Met à jour l'avatar loup prédéfini via la RPC dédiée `update_my_avatar_preset`
  * (jamais d'UPDATE direct — aucun GRANT sur cette colonne, voir migration
  * Phase 7.5). Le typage `WolfAvatarId` du paramètre empêche déjà tout envoi
  * d'une valeur hors catalogue depuis l'app ; la RPC revalide malgré tout côté
  * serveur (contrainte CHECK en dernier rempart).
+ *
+ * Choisir un préréglage efface aussi la photo personnelle existante
+ * (avatar_url) côté serveur (migration 20260723170000) : `AvatarImage`
+ * donne toujours priorité à avatar_url sur avatar_preset, donc sans cet
+ * effacement le préréglage choisi ne s'affichait jamais nulle part tant
+ * qu'une photo restait présente.
  */
-export async function updateMyAvatarPreset(avatarPreset: WolfAvatarId): Promise<WolfAvatarId> {
+export async function updateMyAvatarPreset(avatarPreset: WolfAvatarId): Promise<AvatarPresetUpdateResult> {
   const { data, error } = await supabase.rpc('update_my_avatar_preset', {
     p_avatar_preset: avatarPreset,
   });
@@ -176,10 +192,12 @@ export async function updateMyAvatarPreset(avatarPreset: WolfAvatarId): Promise<
     throw new Error(friendlyRpcError(error, "Impossible de mettre à jour l'avatar pour le moment."));
   }
 
-  const row = (Array.isArray(data) ? data[0] : data) as { id: string; avatar_preset: string } | undefined;
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { id: string; avatar_preset: string; previous_avatar_path: string | null }
+    | undefined;
   if (!row || !isWolfAvatarId(row.avatar_preset)) {
     throw new Error("Impossible de mettre à jour l'avatar pour le moment.");
   }
 
-  return row.avatar_preset;
+  return { avatarPreset: row.avatar_preset, previousAvatarPath: row.previous_avatar_path };
 }

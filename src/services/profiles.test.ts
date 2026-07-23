@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { getMyProfile, searchProfiles, updateMyProfile } from '@/services/profiles';
+import { getMyProfile, searchProfiles, updateMyAvatarPreset, updateMyProfile } from '@/services/profiles';
 
 jest.mock('@/lib/supabase', () => ({
   supabase: {
@@ -262,6 +262,64 @@ describe('updateMyProfile', () => {
 
     await expect(updateMyProfile({ username: 'kenjiro47', displayName: 'Kenjiro' })).rejects.toThrow(
       'Impossible de mettre à jour le profil pour le moment.',
+    );
+  });
+});
+
+describe('updateMyAvatarPreset', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+  });
+
+  it('transmet le préréglage choisi à la RPC', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: 'me', avatar_preset: 'wolf_grey', avatar_url: null, previous_avatar_path: null }],
+      error: null,
+    });
+
+    await updateMyAvatarPreset('wolf_grey');
+
+    expect(mockRpc).toHaveBeenCalledWith('update_my_avatar_preset', { p_avatar_preset: 'wolf_grey' });
+  });
+
+  it('retourne le préréglage confirmé et previousAvatarPath=null quand aucune photo personnelle n’existait', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: 'me', avatar_preset: 'wolf_grey', avatar_url: null, previous_avatar_path: null }],
+      error: null,
+    });
+
+    const result = await updateMyAvatarPreset('wolf_grey');
+
+    expect(result).toEqual({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
+  });
+
+  it('retourne previousAvatarPath quand une photo personnelle a été remplacée (à nettoyer côté client)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: 'me', avatar_preset: 'wolf_grey', avatar_url: null, previous_avatar_path: 'me/old-photo.jpg' }],
+      error: null,
+    });
+
+    const result = await updateMyAvatarPreset('wolf_grey');
+
+    expect(result).toEqual({ avatarPreset: 'wolf_grey', previousAvatarPath: 'me/old-photo.jpg' });
+  });
+
+  it("lève une erreur française si la RPC échoue", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Network error' } });
+
+    await expect(updateMyAvatarPreset('wolf_grey')).rejects.toThrow(
+      "Impossible de mettre à jour l'avatar pour le moment.",
+    );
+  });
+
+  it('lève une erreur si la RPC renvoie un avatar_preset hors catalogue (défense en profondeur)', async () => {
+    mockRpc.mockResolvedValue({
+      data: [{ id: 'me', avatar_preset: 'inconnu', avatar_url: null, previous_avatar_path: null }],
+      error: null,
+    });
+
+    await expect(updateMyAvatarPreset('wolf_grey')).rejects.toThrow(
+      "Impossible de mettre à jour l'avatar pour le moment.",
     );
   });
 });

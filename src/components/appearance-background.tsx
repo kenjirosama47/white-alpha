@@ -5,23 +5,43 @@
  * une couleur unie quel que soit le fond choisi. Point de rendu unique,
  * réutilisé par les trois écrans plutôt que dupliqué.
  *
- * `resizeMode="cover"` : jamais d'image étirée/déformée. Un voile sombre
- * fixe (pas lié à `darkenLevel`, actuellement sans réglage UI et à 0 par
- * défaut) s'applique automatiquement dès qu'un fond personnalisé est actif,
- * pour garantir la lisibilité du contenu sans dépendre d'un réglage que
- * l'utilisateur ne peut pas encore ajuster.
+ * Correctif build 20 (A5) : `expo-image` (déjà utilisé partout ailleurs
+ * dans l'app, y compris pour les mêmes URI locales `file://` de photo
+ * personnelle — `appearance.tsx`, `avatar-image.tsx`) remplace
+ * `ImageBackground` de React Native, qui déformait/recadrait mal certaines
+ * photos personnelles. `contentFit="cover"` : jamais d'image étirée, ratio
+ * toujours conservé, recadrage centré, aucune bande. Positionnement en
+ * absoluteFill dans un conteneur `flex: 1` plutôt qu'un composant
+ * "background + enfants" tout-en-un (`expo-image` n'en fournit pas) :
+ * remplit tout l'écran de la même façon.
+ *
+ * Correctif build 20 (A4) : le voile de lisibilité n'est plus une valeur
+ * fixe unique — `resolveOverlayOpacity` l'adapte à la palette EFFECTIVEMENT
+ * appliquée (`theme.scheme`, pas `preferences.themeMode` brut). Sous
+ * `forcedScheme="dark"` (écran de conversation), la palette est déjà sombre
+ * par elle-même : un voile identique à celui utilisé sur un thème clair
+ * (Accueil/Profil) cumulait deux couches de noir et rendait le fond choisi
+ * à peine visible. Valeur plus légère en contexte sombre, inchangée en
+ * contexte clair (aucune régression Accueil/Profil).
  *
  * N'affiche et ne journalise jamais l'URI/le chemin résolu.
  */
+import { Image } from 'expo-image';
 import type { PropsWithChildren } from 'react';
-import { ImageBackground, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { resolveBackgroundSource } from '@/lib/resolve-background-source';
 import type { BackgroundSlot } from '@/types/appearance';
 
-/** Opacité fixe du voile de lisibilité posé sur un fond personnalisé (catalogue ou photo). */
-const READABILITY_OVERLAY_COLOR = 'rgba(0, 0, 0, 0.35)';
+/** Voile sur un thème clair (Accueil/Profil, inchangé depuis la version précédente) — non concerné par le correctif A4. */
+const LIGHT_SCHEME_OVERLAY_OPACITY = 0.35;
+/** Voile sur une palette déjà sombre (Conversation, `forcedScheme="dark"`) — allégé (correctif A4) pour ne pas cumuler deux noirs. */
+const DARK_SCHEME_OVERLAY_OPACITY = 0.15;
+
+export function resolveOverlayOpacity(scheme: 'light' | 'dark'): number {
+  return scheme === 'dark' ? DARK_SCHEME_OVERLAY_OPACITY : LIGHT_SCHEME_OVERLAY_OPACITY;
+}
 
 type AppearanceBackgroundProps = PropsWithChildren<{
   slot: BackgroundSlot;
@@ -44,11 +64,18 @@ export function AppearanceBackground({ slot, forcedScheme, style, testID, childr
     );
   }
 
+  const overlayOpacity = resolveOverlayOpacity(theme.scheme);
+
   return (
-    <ImageBackground testID={testID} source={source} resizeMode="cover" style={[styles.fill, style]}>
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: READABILITY_OVERLAY_COLOR }]} />
+    <View testID={testID} style={[styles.fill, style]}>
+      <Image testID={testID ? `${testID}-image` : undefined} source={source} contentFit="cover" style={StyleSheet.absoluteFill} />
+      <View
+        testID={testID ? `${testID}-overlay` : undefined}
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(0, 0, 0, ${overlayOpacity})` }]}
+      />
       {children}
-    </ImageBackground>
+    </View>
   );
 }
 

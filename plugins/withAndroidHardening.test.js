@@ -16,6 +16,12 @@ const {
   RELEASE_KEY_PASSWORD_ENV,
   DEBUG_SIGNING_CONFIG_BLOCK,
   RELEASE_BUILD_TYPE_SIGNING_ANCHOR,
+  setReleaseMinificationEnabled,
+  MINIFY_PROPERTY_KEY,
+  MINIFY_PROPERTY_VALUE,
+  setReleaseShrinkResourcesEnabled,
+  SHRINK_RESOURCES_PROPERTY_KEY,
+  SHRINK_RESOURCES_PROPERTY_VALUE,
 } = require('./withAndroidHardening');
 const appJson = require('../app.json');
 
@@ -175,6 +181,80 @@ ${RELEASE_BUILD_TYPE_SIGNING_ANCHOR}
 
   it('le marqueur identifie bien le correctif de signature officielle', () => {
     expect(RELEASE_SIGNING_MARKER).toContain('RELEASE_SIGNING');
+  });
+});
+
+// Correctif R8/shrinkResources : audit du build 19 a constaté qu'aucun
+// mapping.txt n'était généré (minifyEnabled/shrinkResources valaient false
+// par défaut, aucune des deux propriétés n'étant écrite nulle part dans ce
+// dépôt), alors que SECURITY.md et les rapports de validation précédents
+// documentaient ces deux protections comme actives. Ces tests verrouillent
+// la mutation gradle.properties sans exécuter de prebuild.
+describe('withAndroidHardening — R8/minification et shrinkResources forcés', () => {
+  it('force android.enableMinifyInReleaseBuilds=true quand absent', () => {
+    const result = setReleaseMinificationEnabled([]);
+
+    expect(result).toEqual([{ type: 'property', key: MINIFY_PROPERTY_KEY, value: 'true' }]);
+  });
+
+  it('remplace une valeur précédente "false" par "true" (minification)', () => {
+    const properties = [{ type: 'property', key: MINIFY_PROPERTY_KEY, value: 'false' }];
+
+    const result = setReleaseMinificationEnabled(properties);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe('true');
+  });
+
+  it("ne l'ajoute qu'une seule fois même après plusieurs appels (minification)", () => {
+    let properties = [];
+    properties = setReleaseMinificationEnabled(properties);
+    properties = setReleaseMinificationEnabled(properties);
+
+    const matches = properties.filter((item) => item.type === 'property' && item.key === MINIFY_PROPERTY_KEY);
+    expect(matches).toHaveLength(1);
+  });
+
+  it('force android.enableShrinkResourcesInReleaseBuilds=true quand absent', () => {
+    const result = setReleaseShrinkResourcesEnabled([]);
+
+    expect(result).toEqual([{ type: 'property', key: SHRINK_RESOURCES_PROPERTY_KEY, value: 'true' }]);
+  });
+
+  it('remplace une valeur précédente "false" par "true" (shrinkResources)', () => {
+    const properties = [{ type: 'property', key: SHRINK_RESOURCES_PROPERTY_KEY, value: 'false' }];
+
+    const result = setReleaseShrinkResourcesEnabled(properties);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].value).toBe('true');
+  });
+
+  it("ne l'ajoute qu'une seule fois même après plusieurs appels (shrinkResources)", () => {
+    let properties = [];
+    properties = setReleaseShrinkResourcesEnabled(properties);
+    properties = setReleaseShrinkResourcesEnabled(properties);
+
+    const matches = properties.filter((item) => item.type === 'property' && item.key === SHRINK_RESOURCES_PROPERTY_KEY);
+    expect(matches).toHaveLength(1);
+  });
+
+  it('laisse les autres propriétés Gradle inchangées', () => {
+    const properties = [{ type: 'property', key: 'hermesEnabled', value: 'true' }];
+
+    let result = setReleaseMinificationEnabled(properties);
+    result = setReleaseShrinkResourcesEnabled(result);
+
+    expect(result).toEqual([
+      { type: 'property', key: 'hermesEnabled', value: 'true' },
+      { type: 'property', key: MINIFY_PROPERTY_KEY, value: 'true' },
+      { type: 'property', key: SHRINK_RESOURCES_PROPERTY_KEY, value: 'true' },
+    ]);
+  });
+
+  it('les valeurs exportées pour les tests correspondent aux valeurs réellement appliquées', () => {
+    expect(MINIFY_PROPERTY_VALUE).toBe('true');
+    expect(SHRINK_RESOURCES_PROPERTY_VALUE).toBe('true');
   });
 });
 

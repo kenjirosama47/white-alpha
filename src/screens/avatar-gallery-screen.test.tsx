@@ -27,6 +27,11 @@ jest.mock('@/services/profiles', () => ({
   updateMyAvatarPreset: (...args: unknown[]) => mockUpdateMyAvatarPreset(...args),
 }));
 
+const mockRemoveAvatarFile = jest.fn();
+jest.mock('@/services/avatars', () => ({
+  removeAvatarFile: (...args: unknown[]) => mockRemoveAvatarFile(...args),
+}));
+
 function baseProfileState(overrides: Partial<ReturnType<typeof mockUseMyProfile>> = {}) {
   return {
     profile: baseProfile,
@@ -129,7 +134,7 @@ describe('AvatarGalleryScreen — sélection et aperçu', () => {
 
 describe('AvatarGalleryScreen — sauvegarde', () => {
   it('sauvegarde réussie : appelle la RPC et affiche un message de succès', async () => {
-    mockUpdateMyAvatarPreset.mockResolvedValue('wolf_grey');
+    mockUpdateMyAvatarPreset.mockResolvedValue({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
     await render(<AvatarGalleryScreen />);
 
     await act(async () => {
@@ -145,7 +150,53 @@ describe('AvatarGalleryScreen — sauvegarde', () => {
     expect(await screen.findByText('Avatar mis à jour.')).toBeTruthy();
   });
 
-  it("sauvegarde échouée : affiche l'erreur française, l'ancien avatar reste affiché", async () => {
+  // Correctif A6 (build 21) : un succès silencieux (aucune navigation, texte
+  // discret facilement manqué) avait été signalé « rien ne se passe » lors
+  // d'un test réel — alors que l'avatar était en fait bien enregistré. Le
+  // retour automatique à l'écran précédent rend le succès sans ambiguïté.
+  it('sauvegarde réussie : revient automatiquement à l’écran précédent (router.back)', async () => {
+    mockUpdateMyAvatarPreset.mockResolvedValue({ avatarPreset: 'wolf_grey', previousAvatarPath: null });
+    await render(<AvatarGalleryScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Loup gris'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Choisir cet avatar'));
+      await Promise.resolve();
+    });
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('sauvegarde réussie alors qu’une photo personnelle était active : le préréglage la remplace (avatarUrl effacé, ancien fichier nettoyé)', async () => {
+    mockUpdateMyAvatarPreset.mockResolvedValue({ avatarPreset: 'wolf_grey', previousAvatarPath: 'me/old-photo.jpg' });
+    const setProfile = jest.fn();
+    mockUseMyProfile.mockReturnValue(
+      baseProfileState({
+        profile: { ...baseProfile, avatarUrl: 'https://cdn.test/avatars/me/old-photo.jpg', avatarPath: 'me/old-photo.jpg' },
+        setProfile,
+      }),
+    );
+    await render(<AvatarGalleryScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Loup gris'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Choisir cet avatar'));
+      await Promise.resolve();
+    });
+
+    expect(setProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ avatarPreset: 'wolf_grey', avatarUrl: null, avatarPath: null }),
+    );
+    expect(mockRemoveAvatarFile).toHaveBeenCalledWith('me/old-photo.jpg');
+  });
+
+  it("sauvegarde échouée : affiche l'erreur française dans un conteneur visible (Card), l'ancien avatar reste affiché, aucune navigation", async () => {
     mockUpdateMyAvatarPreset.mockRejectedValue(new Error("Impossible de mettre à jour l'avatar pour le moment."));
     const setProfile = jest.fn();
     mockUseMyProfile.mockReturnValue(baseProfileState({ setProfile }));
@@ -160,10 +211,17 @@ describe('AvatarGalleryScreen — sauvegarde', () => {
       await Promise.resolve();
     });
 
-    expect(await screen.findByText("Impossible de mettre à jour l'avatar pour le moment.")).toBeTruthy();
+    const errorText = await screen.findByText("Impossible de mettre à jour l'avatar pour le moment.");
+    expect(errorText).toBeTruthy();
+    // Correctif A6 : l'erreur est portée par un conteneur (Card) avec le
+    // rôle d'alerte d'accessibilité, jamais un texte nu facile à manquer.
+    expect(errorText.parent?.props.accessibilityRole).toBe('alert');
     // L'ancien avatar reste affiché ailleurs dans l'app : setProfile (qui
     // propagerait le changement) n'est jamais appelé après un échec.
     expect(setProfile).not.toHaveBeenCalled();
+    // Aucun écran bloqué : on reste sur cet écran, possibilité de réessayer.
+    expect(router.back).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Choisir cet avatar')).toBeTruthy();
   });
 
   it('bouton Retour ramène au profil sans aucune modification (pas d’appel RPC)', async () => {

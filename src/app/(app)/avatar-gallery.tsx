@@ -1,8 +1,10 @@
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppErrorState } from '@/components/app-error-state';
 import { AppLoadingState } from '@/components/app-loading-state';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -41,6 +43,26 @@ type AvatarGalleryContentProps = {
 function AvatarGalleryContent({ profile, onSaved }: AvatarGalleryContentProps) {
   const theme = useTheme();
   const editor = useAvatarPreset(profile, onSaved);
+
+  /**
+   * Correctif A6 (build 21) : avant ce correctif, une sauvegarde réussie
+   * laissait l'utilisateur sur le même écran avec un simple texte
+   * « Avatar mis à jour. » discret sous la grille — facilement manqué, au
+   * point qu'un audit réel a signalé « rien ne se passe » alors que la
+   * sélection avait bien été appliquée. Le retour automatique à l'écran
+   * précédent rend le succès sans ambiguïté (même convention que
+   * `handleConfirmClearConversation`, conversation/[id].tsx). En cas
+   * d'échec, `editor.save()` renvoie `false` et ne navigue jamais : l'erreur
+   * (déjà classifiée en message clair par `friendlyRpcError`/`describeError`,
+   * voir services/profiles.ts et utils/errors.ts) reste affichée à l'écran,
+   * jamais d'écran bloqué.
+   */
+  async function handleSave() {
+    const saved = await editor.save();
+    if (saved) {
+      router.back();
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -99,9 +121,14 @@ function AvatarGalleryContent({ profile, onSaved }: AvatarGalleryContentProps) {
       </ThemedView>
 
       {editor.error && (
-        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert" style={styles.centeredText}>
-          {editor.error}
-        </ThemedText>
+        // Correctif A6 (build 21) : carte bordée plutôt qu'un simple texte
+        // discret — un échec ne doit jamais pouvoir passer inaperçu (voir
+        // commentaire de handleSave ci-dessus).
+        <Card style={[styles.errorCard, { borderColor: theme.danger }]} accessibilityRole="alert">
+          <ThemedText type="bodySmall" themeColor="danger" style={styles.centeredText}>
+            {editor.error}
+          </ThemedText>
+        </Card>
       )}
       {editor.success && (
         <ThemedText type="bodySmall" themeColor="accent" style={styles.centeredText}>
@@ -113,7 +140,7 @@ function AvatarGalleryContent({ profile, onSaved }: AvatarGalleryContentProps) {
         <Button label="Annuler" onPress={editor.reset} disabled={!editor.isDirty || editor.isSaving} variant="secondary" />
         <Button
           label="Choisir cet avatar"
-          onPress={editor.save}
+          onPress={handleSave}
           disabled={!editor.isDirty || editor.isSaving}
           loading={editor.isSaving}
         />
@@ -141,6 +168,9 @@ const styles = StyleSheet.create({
   },
   centeredText: {
     textAlign: 'center',
+  },
+  errorCard: {
+    borderWidth: 1,
   },
   grid: {
     flexDirection: 'row',
