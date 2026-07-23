@@ -153,6 +153,23 @@ describe('sanitizeAppearancePreferences', () => {
     expect(result.backgrounds.conversation).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.conversation);
   });
 
+  it('rejette un fond personnel sans localUri (stockage corrompu, Phase 10.5a)', () => {
+    const result = sanitizeAppearancePreferences({ backgrounds: { home: { kind: 'personal' } } });
+    expect(result.backgrounds.home).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.home);
+  });
+
+  it('rejette un fond personnel dont localUri est vide ou n’est pas une chaine (stockage corrompu, Phase 10.5a)', () => {
+    const resultEmpty = sanitizeAppearancePreferences({
+      backgrounds: { profile: { kind: 'personal', localUri: '' } },
+    });
+    expect(resultEmpty.backgrounds.profile).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.profile);
+
+    const resultWrongType = sanitizeAppearancePreferences({
+      backgrounds: { profile: { kind: 'personal', localUri: 42 } },
+    });
+    expect(resultWrongType.backgrounds.profile).toEqual(DEFAULT_APPEARANCE_PREFERENCES.backgrounds.profile);
+  });
+
   it('rejette un avatarPreset hors catalogue', () => {
     const result = sanitizeAppearancePreferences({ avatarPreset: 'wolf_inexistant' });
     expect(result.avatarPreset).toBe(DEFAULT_APPEARANCE_PREFERENCES.avatarPreset);

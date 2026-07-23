@@ -63,4 +63,17 @@ describe('app.json — surface de permissions (Phase 5.S5)', () => {
   it('le scheme de deep link reste "whitealpha" (utilisé par la vérification manifeste, Phase 5.S5)', () => {
     expect(appJson.expo.scheme).toBe('whitealpha');
   });
+
+  // Phase 10.5a : expo-file-system est installé (stockage privé des photos
+  // personnelles, voir lib/personal-photo-storage.ts) mais SON PLUGIN
+  // n'est délibérément jamais enregistré ici — l'exécuter ajouterait
+  // READ_EXTERNAL_STORAGE/WRITE_EXTERNAL_STORAGE/INTERNET au manifeste
+  // Android, alors que l'app n'accède qu'à son propre répertoire privé
+  // (`Paths.document`), qui ne nécessite aucune permission. Un plugin non
+  // listé dans `plugins` ne s'exécute jamais au prebuild : ce test verrouille
+  // cette décision contre un ajout accidentel futur.
+  it("n'enregistre pas le plugin expo-file-system (stockage privé uniquement, aucune permission de stockage externe nécessaire)", () => {
+    expect(findPlugin('expo-file-system')).toBeUndefined();
+    expect(appJson.expo.plugins).not.toContain('expo-file-system');
+  });
 });

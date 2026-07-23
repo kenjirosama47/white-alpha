@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppLoadingState } from '@/components/app-loading-state';
@@ -18,7 +19,9 @@ import {
 } from '@/constants/decorations';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useAppearanceContext } from '@/contexts/appearance-context';
+import { usePersonalPhotoEditor } from '@/hooks/use-personal-photo-editor';
 import { useTheme } from '@/hooks/use-theme';
+import { deletePersonalPhotoFile, personalPhotoFileExists } from '@/lib/personal-photo-storage';
 import type { AppearancePreferences, BackgroundConfig, BackgroundSlot } from '@/types/appearance';
 
 type ColorTarget = 'accentColor' | 'buttonColor' | 'bubbleSentColor' | 'bubbleReceivedColor';
@@ -48,6 +51,7 @@ export default function AppearanceScreen() {
   // modifie `AppearancePreferences`.
   const [activeSlot, setActiveSlot] = useState<BackgroundSlot>('home');
   const [activeCategory, setActiveCategory] = useState<DecorationCategoryId>(DECORATION_CATEGORIES[0].id);
+  const personalPhotoEditor = usePersonalPhotoEditor();
 
   // Nettoyage du minuteur de confirmation au démontage (navigation retour
   // pendant l'affichage du message) : évite un setState après démontage.
@@ -82,14 +86,78 @@ export default function AppearanceScreen() {
 
   async function handleReset() {
     setError(null);
+    const previousBackgrounds = preferences.backgrounds;
     await resetPreferences();
     showConfirmation('Préférences réinitialisées.');
+    // Nettoyage des photos personnelles des 3 sections (Phase 10.5a) : une
+    // réinitialisation globale ne doit jamais laisser de fichier privé
+    // orphelin, qu'aucune préférence ne référence plus.
+    for (const background of Object.values(previousBackgrounds)) {
+      if (background.kind === 'personal') {
+        await deletePersonalPhotoFile(background.localUri);
+      }
+    }
   }
 
   const currentSlotBackground = preferences.backgrounds[activeSlot];
 
   function applyBackgroundChange(nextBackground: BackgroundConfig) {
     return applyChange({ backgrounds: { ...preferences.backgrounds, [activeSlot]: nextBackground } });
+  }
+
+  /**
+   * Réinitialise la section active vers le fond par défaut (bouton déjà
+   * présent depuis la Phase 10.4, réutilisé tel quel pour la Phase 10.5a) :
+   * si le fond retiré était une photo personnelle, son fichier privé est
+   * aussi supprimé définitivement (jamais un résidu orphelin).
+   */
+  async function resetSlotToDefault() {
+    const previousBackground = currentSlotBackground;
+    await applyBackgroundChange({ kind: 'default' });
+    if (previousBackground.kind === 'personal') {
+      await deletePersonalPhotoFile(previousBackground.localUri);
+    }
+  }
+
+  /**
+   * `true` tant que le fond actif n'est pas une photo personnelle (rien à
+   * vérifier), ou si le fichier référencé existe encore. Vérification
+   * synchrone (voir `lib/personal-photo-storage.ts`) : pas d'état de
+   * chargement intermédiaire nécessaire.
+   */
+  const personalPhotoAvailable = useMemo(() => {
+    if (currentSlotBackground.kind !== 'personal') return true;
+    return personalPhotoFileExists(currentSlotBackground.localUri);
+  }, [currentSlotBackground]);
+
+  // Photo personnelle devenue inaccessible (fichier supprimé hors de l'app,
+  // stockage externe démonté, etc., Phase 10.5a) : repli automatique et
+  // silencieux sur le fond par défaut, jamais une erreur bloquante affichée
+  // à l'utilisateur pour un fichier qu'il ne peut de toute façon plus
+  // récupérer depuis cet écran. `applyBackgroundChange` synchronise l'état
+  // React avec un système externe (le système de fichiers, via
+  // `personalPhotoAvailable`) qui a changé en dehors de React : c'est
+  // exactement l'usage prévu d'un effet (voir la documentation React), pas
+  // un anti-pattern — la règle de lint est donc désactivée ici sciemment,
+  // pas contournée artificiellement.
+  useEffect(() => {
+    if (currentSlotBackground.kind === 'personal' && !personalPhotoAvailable) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronisation volontaire avec le système de fichiers (fichier disparu hors de React), voir commentaire au-dessus de l'effet.
+      applyBackgroundChange({ kind: 'default' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ne doit réagir qu'à un changement réel de fond, jamais à l'identité de applyBackgroundChange (recréée à chaque rendu).
+  }, [currentSlotBackground, personalPhotoAvailable]);
+
+  /** Confirme la photo en attente (déjà recadrée/compressée/enregistrée en privé, voir `use-personal-photo-editor.ts`) : ne supprime l'ancienne photo remplacée qu'une fois la nouvelle appliquée avec succès. */
+  async function confirmPersonalPhoto() {
+    const newUri = personalPhotoEditor.previewUri;
+    if (!newUri) return;
+    const previousBackground = currentSlotBackground;
+    await applyBackgroundChange({ kind: 'personal', localUri: newUri });
+    personalPhotoEditor.clearAfterConfirm();
+    if (previousBackground.kind === 'personal' && previousBackground.localUri !== newUri) {
+      await deletePersonalPhotoFile(previousBackground.localUri);
+    }
   }
 
   return (
@@ -125,9 +193,17 @@ export default function AppearanceScreen() {
               onSelect={(decorationId) => applyBackgroundChange({ kind: 'catalog', decorationId })}
             />
 
+            <PersonalPhotoSection
+              activeSlot={activeSlot}
+              currentBackground={currentSlotBackground}
+              currentBackgroundAvailable={personalPhotoAvailable}
+              editor={personalPhotoEditor}
+              onConfirm={confirmPersonalPhoto}
+            />
+
             <Button
               label="Fond par défaut"
-              onPress={() => applyBackgroundChange({ kind: 'default' })}
+              onPress={resetSlotToDefault}
               variant="secondary"
               size="small"
               disabled={currentSlotBackground.kind === 'default'}
@@ -215,7 +291,12 @@ type AppearancePreviewCardProps = {
 function AppearancePreviewCard({ activeSlot }: AppearancePreviewCardProps) {
   const theme = useTheme();
   const background = theme.preferences.backgrounds[activeSlot];
-  const imageSource = background.kind === 'catalog' ? resolveDecorationSource(background.decorationId) : null;
+  const imageSource =
+    background.kind === 'catalog'
+      ? resolveDecorationSource(background.decorationId)
+      : background.kind === 'personal' && personalPhotoFileExists(background.localUri)
+        ? { uri: background.localUri }
+        : null;
 
   const content = (
     <>
@@ -370,6 +451,92 @@ function DecorationGalleryRow({ categoryId, selectedDecorationId, onSelect }: De
   );
 }
 
+type PersonalPhotoSectionProps = {
+  activeSlot: BackgroundSlot;
+  currentBackground: BackgroundConfig;
+  /** `false` si `currentBackground` est de type `personal` mais que le fichier référencé n'existe plus (Phase 10.5a) — le composant parent se charge du repli réel sur les préférences, cette prop évite seulement d'afficher une vignette cassée pendant ce court instant. */
+  currentBackgroundAvailable: boolean;
+  editor: ReturnType<typeof usePersonalPhotoEditor>;
+  onConfirm: () => void;
+};
+
+/**
+ * Entrée « Mes photos » (Phase 10.5a) : choisir/remplacer une photo
+ * personnelle pour la section active. Le recadrage portrait, le
+ * repositionnement et le zoom sont fournis par l'éditeur natif du système
+ * (`allowsEditing`, voir `services/personal-photo.ts`) — aucune
+ * bibliothèque de recadrage supplémentaire. Un aperçu (photo déjà
+ * recadrée/compressée/enregistrée en privé, pas encore appliquée) doit
+ * être confirmé ou annulé avant de remplacer la préférence. La suppression
+ * définitive réutilise le bouton « Fond par défaut » déjà présent
+ * juste en dessous (voir `resetSlotToDefault` dans le composant parent),
+ * qui supprime aussi le fichier privé — jamais un second bouton faisant la
+ * même chose.
+ */
+function PersonalPhotoSection({
+  activeSlot,
+  currentBackground,
+  currentBackgroundAvailable,
+  editor,
+  onConfirm,
+}: PersonalPhotoSectionProps) {
+  const personalUri =
+    currentBackground.kind === 'personal' && currentBackgroundAvailable ? currentBackground.localUri : null;
+  const isBusy = editor.isPicking || editor.isProcessing;
+
+  return (
+    <ThemedView style={styles.personalPhotoSection}>
+      <ThemedText type="bodySmall" themeColor="textSecondary">
+        Mes photos
+      </ThemedText>
+
+      {editor.previewUri ? (
+        <>
+          <Image
+            source={{ uri: editor.previewUri }}
+            style={styles.personalPreviewImage}
+            contentFit="cover"
+            accessibilityIgnoresInvertColors
+            accessible={false}
+          />
+          <ThemedText type="caption" themeColor="textSecondary">
+            Aperçu avant validation
+          </ThemedText>
+          <ThemedView style={styles.personalPhotoActions}>
+            <Button label="Annuler" onPress={editor.cancel} variant="secondary" size="small" />
+            <Button label="Utiliser cette photo" onPress={onConfirm} size="small" />
+          </ThemedView>
+        </>
+      ) : (
+        <>
+          {personalUri && (
+            <Image
+              source={{ uri: personalUri }}
+              style={styles.personalPreviewImage}
+              contentFit="cover"
+              accessibilityLabel={`Photo personnelle actuelle pour ${backgroundSlotLabel(activeSlot).toLowerCase()}`}
+            />
+          )}
+          <Button
+            label={personalUri ? 'Remplacer par une autre photo' : 'Choisir une photo'}
+            onPress={editor.pick}
+            variant={personalUri ? 'secondary' : 'primary'}
+            size="small"
+            loading={isBusy}
+            disabled={isBusy}
+          />
+        </>
+      )}
+
+      {editor.error && (
+        <ThemedText type="bodySmall" themeColor="danger" accessibilityRole="alert">
+          {editor.error}
+        </ThemedText>
+      )}
+    </ThemedView>
+  );
+}
+
 type ColorPresetRowProps = {
   value: string;
   onSelect: (hex: string) => void;
@@ -511,5 +678,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 2,
     right: 2,
+  },
+  personalPhotoSection: {
+    gap: Spacing.two,
+  },
+  personalPreviewImage: {
+    width: 120,
+    height: Math.round((120 * 16) / 9),
+    borderRadius: Radius.md,
+  },
+  personalPhotoActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
 });

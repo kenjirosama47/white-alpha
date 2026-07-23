@@ -7,11 +7,36 @@ import { DEFAULT_APPEARANCE_PREFERENCES } from '@/constants/appearance';
 import { Colors } from '@/constants/theme';
 import { DECORATION_CATEGORIES, getDecorationsByCategory, resolveDecorationSource } from '@/constants/decorations';
 import { AppearanceContext, type AppearanceContextValue } from '@/contexts/appearance-context';
+import { usePersonalPhotoEditor } from '@/hooks/use-personal-photo-editor';
+import { deletePersonalPhotoFile, personalPhotoFileExists } from '@/lib/personal-photo-storage';
 import type { AppearancePreferences } from '@/types/appearance';
 
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
 }));
+
+jest.mock('@/lib/personal-photo-storage', () => ({
+  personalPhotoFileExists: jest.fn(() => true),
+  deletePersonalPhotoFile: jest.fn().mockResolvedValue(undefined),
+  savePersonalPhotoFile: jest.fn(),
+}));
+
+jest.mock('@/hooks/use-personal-photo-editor', () => ({
+  usePersonalPhotoEditor: jest.fn(),
+}));
+
+function personalPhotoEditorState(overrides: Partial<ReturnType<typeof usePersonalPhotoEditor>> = {}) {
+  return {
+    previewUri: null,
+    isPicking: false,
+    isProcessing: false,
+    error: null,
+    pick: jest.fn(),
+    cancel: jest.fn(),
+    clearAfterConfirm: jest.fn(),
+    ...overrides,
+  };
+}
 
 // `resolveDecorationSource`/`getDecorationsByCategory` restent le VRAI
 // catalogue par défaut (jest.fn() enveloppant l'implémentation réelle) :
@@ -76,6 +101,8 @@ function TestAppearanceProvider({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (personalPhotoFileExists as jest.Mock).mockReturnValue(true);
+  (usePersonalPhotoEditor as jest.Mock).mockReturnValue(personalPhotoEditorState());
 });
 
 describe('AppearanceScreen — ouverture et chargement', () => {
@@ -378,6 +405,211 @@ describe('AppearanceScreen — galerie de décorations (Phase 10.4)', () => {
   });
 });
 
+describe('AppearanceScreen — photo personnelle (Phase 10.5a)', () => {
+  it('affiche l’entrée « Mes photos » avec un bouton « Choisir une photo » quand aucune photo personnelle n’est appliquée', async () => {
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    expect(screen.getByText('Mes photos')).toBeTruthy();
+    expect(screen.getByText('Choisir une photo')).toBeTruthy();
+  });
+
+  it('appuyer sur « Choisir une photo » déclenche la sélection (sélection/validation/recadrage/compression déléguées au hook)', async () => {
+    const pick = jest.fn();
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(personalPhotoEditorState({ pick }));
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    fireEvent.press(screen.getByText('Choisir une photo'));
+
+    expect(pick).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche l’aperçu en attente avec « Utiliser cette photo »/« Annuler » une fois une photo traitée', async () => {
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(
+      personalPhotoEditorState({ previewUri: 'file:///private/appearance-photos/pending.jpg' }),
+    );
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    expect(screen.getByText('Aperçu avant validation')).toBeTruthy();
+    expect(screen.getByText('Utiliser cette photo')).toBeTruthy();
+    expect(screen.getByText('Annuler')).toBeTruthy();
+    // Tant que la photo n'est pas confirmée, aucune préférence n'est modifiée.
+    expect(screen.queryByText('Choisir une photo')).toBeNull();
+  });
+
+  it('« Annuler » appelle cancel() du hook (supprime le fichier en attente), sans toucher aux préférences', async () => {
+    const cancel = jest.fn();
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(
+      personalPhotoEditorState({ previewUri: 'file:///private/appearance-photos/pending.jpg', cancel }),
+    );
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    fireEvent.press(screen.getByText('Annuler'));
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it('« Utiliser cette photo » applique la nouvelle photo à la section active (sans photo précédente)', async () => {
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    const clearAfterConfirm = jest.fn();
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(
+      personalPhotoEditorState({ previewUri: 'file:///private/appearance-photos/new.jpg', clearAfterConfirm }),
+    );
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Utiliser cette photo'));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      backgrounds: { ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds, home: { kind: 'personal', localUri: 'file:///private/appearance-photos/new.jpg' } },
+    });
+    expect(clearAfterConfirm).toHaveBeenCalledTimes(1);
+    expect(deletePersonalPhotoFile).not.toHaveBeenCalled();
+  });
+
+  it('remplacement : confirmer une nouvelle photo supprime l’ancienne photo personnelle de la section', async () => {
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'personal', localUri: 'file:///private/appearance-photos/old.jpg' },
+      },
+    };
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(
+      personalPhotoEditorState({ previewUri: 'file:///private/appearance-photos/new.jpg' }),
+    );
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences, updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Utiliser cette photo'));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backgrounds: expect.objectContaining({ home: { kind: 'personal', localUri: 'file:///private/appearance-photos/new.jpg' } }),
+      }),
+    );
+    expect(deletePersonalPhotoFile).toHaveBeenCalledWith('file:///private/appearance-photos/old.jpg');
+  });
+
+  it('affiche la photo personnelle actuelle avec un bouton « Remplacer par une autre photo » quand une photo est déjà appliquée', async () => {
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'personal', localUri: 'file:///private/appearance-photos/current.jpg' },
+      },
+    };
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    expect(screen.getByLabelText('Photo personnelle actuelle pour accueil')).toBeTruthy();
+    expect(screen.getByText('Remplacer par une autre photo')).toBeTruthy();
+  });
+
+  it('suppression : le bouton « Fond par défaut » supprime le fichier de la photo personnelle de la section', async () => {
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'personal', localUri: 'file:///private/appearance-photos/current.jpg' },
+      },
+    };
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences, updatePreferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Revenir au fond par défaut pour accueil'));
+      await Promise.resolve();
+    });
+
+    expect(updatePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ backgrounds: expect.objectContaining({ home: { kind: 'default' } }) }),
+    );
+    expect(deletePersonalPhotoFile).toHaveBeenCalledWith('file:///private/appearance-photos/current.jpg');
+  });
+
+  it('fichier local manquant : repli automatique sur le fond par défaut, sans erreur affichée à l’utilisateur', async () => {
+    (personalPhotoFileExists as jest.Mock).mockReturnValue(false);
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        ...DEFAULT_APPEARANCE_PREFERENCES.backgrounds,
+        home: { kind: 'personal', localUri: 'file:///private/appearance-photos/gone.jpg' },
+      },
+    };
+    const updatePreferences = jest.fn().mockResolvedValue(undefined);
+
+    await act(async () => {
+      render(
+        <AppearanceContext.Provider value={staticContextValue({ preferences, updatePreferences })}>
+          <AppearanceScreen />
+        </AppearanceContext.Provider>,
+      );
+      await Promise.resolve();
+    });
+
+    // Aucune miniature de photo personnelle affichée (fichier absent) : repli sur le bouton « Choisir une photo ».
+    expect(screen.queryByLabelText('Photo personnelle actuelle pour accueil')).toBeNull();
+    expect(screen.getByText('Choisir une photo')).toBeTruthy();
+    // Auto-guérison : la section revient au fond par défaut dans les préférences.
+    expect(updatePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ backgrounds: expect.objectContaining({ home: { kind: 'default' } }) }),
+    );
+    expect(screen.queryByText(/Impossible/)).toBeNull();
+  });
+
+  it('affiche une erreur accessible si le hook signale une erreur (permission refusée, format invalide, etc.)', async () => {
+    (usePersonalPhotoEditor as jest.Mock).mockReturnValue(
+      personalPhotoEditorState({ error: 'Accès à tes photos refusé. Autorise l’accès dans les réglages pour choisir une photo personnelle.' }),
+    );
+    await render(
+      <AppearanceContext.Provider value={staticContextValue()}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    const errorText = screen.getByText('Accès à tes photos refusé. Autorise l’accès dans les réglages pour choisir une photo personnelle.');
+    expect(errorText.props.accessibilityRole).toBe('alert');
+  });
+});
+
 describe('AppearanceScreen — réglages', () => {
   it('thème clair : sélectionner "Clair" appelle updatePreferences avec themeMode "light"', async () => {
     const updatePreferences = jest.fn().mockResolvedValue(undefined);
@@ -475,6 +707,31 @@ describe('AppearanceScreen — sauvegarde, réinitialisation et erreurs', () => 
 
     expect(resetPreferences).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Préférences réinitialisées.')).toBeTruthy();
+  });
+
+  it('reset : supprime aussi les photos personnelles des 3 sections (aucun fichier privé orphelin)', async () => {
+    const preferences: AppearancePreferences = {
+      ...DEFAULT_APPEARANCE_PREFERENCES,
+      backgrounds: {
+        home: { kind: 'personal', localUri: 'file:///private/home.jpg' },
+        conversation: { kind: 'catalog', decorationId: 'forest_canopy' },
+        profile: { kind: 'personal', localUri: 'file:///private/profile.jpg' },
+      },
+    };
+    await render(
+      <AppearanceContext.Provider value={staticContextValue({ preferences })}>
+        <AppearanceScreen />
+      </AppearanceContext.Provider>,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Réinitialiser'));
+      await Promise.resolve();
+    });
+
+    expect(deletePersonalPhotoFile).toHaveBeenCalledWith('file:///private/home.jpg');
+    expect(deletePersonalPhotoFile).toHaveBeenCalledWith('file:///private/profile.jpg');
+    expect(deletePersonalPhotoFile).toHaveBeenCalledTimes(2);
   });
 
   it('affiche un message d’erreur accessible si la sauvegarde locale échoue, sans faire planter l’écran', async () => {
