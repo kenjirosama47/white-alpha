@@ -197,6 +197,21 @@ describe('web/ — audit statique de sécurité (Phase 8.5.4, pièces jointes)',
   });
 });
 
+describe('web/ — audit statique de sécurité (Phase MFA — enrôlement TOTP owner)', () => {
+  it('aucun console.* dans app/membre/securite/mfa/ (secret TOTP, QR code et code de vérification jamais journalisés)', () => {
+    const mfaDir = path.join(ROOT, 'app', 'membre', 'securite', 'mfa');
+    const offenders = collectSourceFiles(mfaDir).filter((file) => /console\.\w+\(/.test(readFileSync(file, 'utf8')));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('lib/mfa-errors.ts ne renvoie jamais tel quel le message brut de Supabase Auth (uniquement des messages traduits fixes)', () => {
+    const content = readFileSync(path.join(ROOT, 'lib', 'mfa-errors.ts'), 'utf8');
+
+    expect(content).not.toMatch(/return message;/);
+  });
+});
+
 describe('public/sw.js — audit statique du Service Worker (Phase 8.2)', () => {
   const swContent = readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8');
 
