@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 
 import { Button } from '@/components/Button';
 import { FormError } from '@/components/FormError';
 import { PasswordField } from '@/components/PasswordField';
-import { REGISTER_SUBMITTED_COPY } from '@/lib/copy';
+import { INVITATION_CODE_FIELD_COPY, REGISTER_SUBMITTED_COPY } from '@/lib/copy';
 import { MIN_PASSWORD_LENGTH } from '@/lib/validation';
 import formStyles from '@/styles/form.module.css';
 
@@ -22,6 +22,19 @@ const initialState: RegisterState = { error: null, submitted: false };
 
 export function RegisterForm() {
   const [state, formAction, isPending] = useActionState(registerAction, initialState);
+  const invitationCodeRef = useRef<HTMLInputElement>(null);
+
+  // Le code d'invitation ne doit jamais rester affiché après une tentative,
+  // réussie ou non (champ non contrôlé : le DOM le garderait sinon tel
+  // quel après une erreur, puisque useActionState ne démonte pas le
+  // formulaire). `state` change de référence à chaque appel de
+  // registerAction (nouvel objet retourné) : cet effet s'exécute donc après
+  // CHAQUE tentative, succès ou erreur, jamais seulement au montage initial.
+  useEffect(() => {
+    if (invitationCodeRef.current) {
+      invitationCodeRef.current.value = '';
+    }
+  }, [state]);
 
   if (state.submitted) {
     return (
@@ -36,6 +49,25 @@ export function RegisterForm() {
 
   return (
     <form action={formAction} className={formStyles.form}>
+      <div className={formStyles.field}>
+        <label className={formStyles.label} htmlFor="invitationCode">
+          {INVITATION_CODE_FIELD_COPY.label}
+        </label>
+        <input
+          ref={invitationCodeRef}
+          id="invitationCode"
+          name="invitationCode"
+          type="text"
+          autoComplete="off"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          placeholder={INVITATION_CODE_FIELD_COPY.placeholder}
+          required
+          className={formStyles.input}
+          disabled={isPending}
+        />
+      </div>
+
       <div className={formStyles.field}>
         <label className={formStyles.label} htmlFor="username">
           Nom d&apos;utilisateur

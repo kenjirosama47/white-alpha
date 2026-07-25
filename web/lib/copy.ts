@@ -36,10 +36,24 @@ export const REGISTER_COPY = {
   title: 'Rejoignez la meute White Alpha',
 } as const;
 
-/** Inscription publique désactivée (voir registration-config.ts, PLAN.md Phase 8). */
-export const REGISTRATION_CLOSED_COPY = {
-  title: 'Inscriptions fermées',
-  message: 'White Alpha est une messagerie privée : les comptes sont créés uniquement par un administrateur.',
+/**
+ * Inscription par code d'invitation uniquement (remplace l'ancienne
+ * fermeture totale, registration-config.ts, supprimée) : message UNIQUE et
+ * volontairement vague, utilisé pour les 6 cas de blocage liés au code
+ * (absent, inconnu, expiré, révoqué, déjà utilisé, rate limiting) — jamais
+ * de texte différent entre ces cas (anti-énumération, même principe que
+ * REGISTER_SUBMITTED_COPY pour l'email). Ne mentionne même pas le mot
+ * "code" : un message plus spécifique ("code invalide, expiré...")
+ * confirmerait déjà qu'un code a été *reçu et examiné*, une information à
+ * ne jamais exposer non plus.
+ */
+export const INVITATION_BLOCKED_COPY = {
+  message: "Impossible de finaliser l'inscription. Vérifie les informations saisies et réessaie.",
+} as const;
+
+export const INVITATION_CODE_FIELD_COPY = {
+  label: "Code d'invitation",
+  placeholder: 'WA-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX',
 } as const;
 
 export const MEMBER_HOME_COPY = {

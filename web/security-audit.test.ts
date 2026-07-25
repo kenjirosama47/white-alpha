@@ -79,12 +79,24 @@ describe('web/ — audit statique de sécurité (Phase 8.2)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it("registerAction ne branche jamais sur le détail de l'erreur signUp (anti-énumération, corrigé après revue)", () => {
-    const content = readFileSync(path.join(ROOT, 'app', 'inscription', 'actions.ts'), 'utf8');
+  it(
+    "registerAction ne lit JAMAIS error.message/error.code d'une réponse Supabase dans son code exécutable " +
+      '(anti-énumération, corrigé après revue, renforcé Phase 8.9 : GoTrue enveloppe les erreurs du trigger ' +
+      "handle_new_user dans un message générique pour un vrai visiteur — comparer error.message était devenu " +
+      'peu fiable ; la validité du code est désormais vérifiée en amont via is_invitation_code_usable, jamais ' +
+      "après coup via le contenu de l'erreur signUp)",
+    () => {
+      const content = readFileSync(path.join(ROOT, 'app', 'inscription', 'actions.ts'), 'utf8');
+      // Les commentaires ont le droit de MENTIONNER error.message (pour
+      // documenter précisément ce qu'il ne faut jamais faire) — seul le code
+      // exécutable réel doit en être exempt.
+      const codeOnly = content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-    expect(content).not.toMatch(/error\.message/);
-    expect(content).not.toContain('User already registered');
-  });
+      expect(codeOnly).not.toMatch(/error\.message/);
+      expect(codeOnly).not.toMatch(/error\.code\b/);
+      expect(content).not.toContain('User already registered');
+    },
+  );
 
   it('aucun code MFA, mot de passe ou jeton de confirmation journalisé via console.* (Phase 8.3)', () => {
     const offenders = sourceFiles.filter((file) => {

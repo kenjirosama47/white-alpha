@@ -12,6 +12,7 @@ jest.mock('./actions', () => ({
 const mockRegisterAction = registerAction as jest.Mock;
 
 function fillValidForm() {
+  fireEvent.change(screen.getByLabelText("Code d'invitation"), { target: { value: 'WA-ABCD-1234-EFGH-5678-JKMN-PQRS-TV' } });
   fireEvent.change(screen.getByLabelText("Nom d'utilisateur"), { target: { value: 'test_user' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@example.com' } });
   fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'secret123' } });
@@ -66,5 +67,21 @@ describe('RegisterForm (Phase 8.3, anti-énumération)', () => {
 
     await screen.findByRole('status');
     expect(screen.getByRole('link', { name: 'Retour à la connexion' })).toBeTruthy();
+  });
+
+  it("le code d'invitation est effacé du champ après une tentative échouée (jamais conservé à l'écran)", async () => {
+    mockRegisterAction.mockResolvedValue({
+      error: "Impossible de finaliser l'inscription. Vérifie les informations saisies et réessaie.",
+      submitted: false,
+    });
+
+    render(<RegisterForm />);
+    fillValidForm();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Créer mon compte' }));
+    });
+
+    expect((screen.getByLabelText("Code d'invitation") as HTMLInputElement).value).toBe('');
   });
 });

@@ -941,7 +941,69 @@ iPhone :
   publique) et point de contact support, publiés sur ce même domaine
   privé.
 
-### 8.9 — Validation finale
+### 8.9 — Inscription par code d'invitation privé
+- Migration `supabase/migrations/20260723180000_invitation_codes.sql` :
+  tables `invitation_codes` (RLS activée, aucune policy — accès
+  exclusivement via fonctions `SECURITY DEFINER`) et
+  `invitation_attempt_log` (rate limiting, anonymisé).
+- Génération réservée au owner en aal2 (`admin_create_invitation_code`) :
+  code aléatoire 128 bits (Crockford Base32, format
+  `WA-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX`), durée de validité et nombre
+  d'utilisations configurables, note libre optionnelle. Le code brut n'est
+  renvoyé qu'une seule fois, dans la réponse de création — jamais stocké
+  ni rejournalisé ensuite (seul son hash sha256 persiste, `code_hash`).
+- Consommation atomique dans `handle_new_user` (même transaction que la
+  création du compte) : verrouillage `SELECT ... FOR UPDATE`, usage unique
+  par défaut (configurable via `max_uses`), message d'erreur générique
+  unique (`"Code d'invitation invalide."`) pour code inconnu, expiré,
+  révoqué ou déjà entièrement utilisé — aucune énumération possible.
+  Effacement actif du code brut de `auth.users.raw_user_meta_data` après
+  consommation (fuite réelle constatée sans cette étape, voir commentaire
+  de la migration).
+- Bootstrap : le garde-fou est ignoré pour les insertions faites en
+  `session_user = 'postgres'` (SQL Editor Studio, migrations, fixtures de
+  test) — jamais atteignable depuis l'app publique, qui passe toujours par
+  GoTrue (`supabase_auth_admin`, vérifié empiriquement). Utilise
+  délibérément `session_user`, jamais `current_user` seul : `current_user`
+  devient toujours le propriétaire de la fonction à l'intérieur d'un bloc
+  `SECURITY DEFINER`, ce qui aurait silencieusement annulé le garde-fou
+  pour n'importe quel appelant (bug réellement rencontré et corrigé
+  pendant cette session, via `supabase test db`).
+- Révocation immédiate (`admin_revoke_invitation_code`, idempotent-safe).
+- Rate limiting (`is_invitation_rate_limited` / `record_invitation_attempt`) :
+  5 tentatives par 15 minutes par IP hachée (HMAC serveur,
+  `INVITATION_IP_HASH_SECRET`, jamais l'IP en clair) et par préfixe de code
+  visé, purge automatique des entrées de plus de 24h, échec fermé si le
+  secret de hachage est absent.
+- Formulaire d'inscription (`web/app/inscription/`) : champ code
+  obligatoire, jamais conservé à l'écran après une tentative, message
+  d'erreur générique identique côté client, rate limiting câblé via
+  `web/lib/invitation-rate-limit.ts`.
+- Écran d'administration owner (`web/app/membre/admin/invitations/`) :
+  génération avec révélation du code une seule fois, tableau (date de
+  création, statut, expiration, utilisations, personne invitée, note,
+  bouton de révocation). Aucune vérification owner/aal2 dupliquée côté
+  page — la garde réelle et unique vit dans les fonctions Postgres.
+- Message d'erreur unique côté client (`INVITATION_BLOCKED_COPY`) pour les 6
+  cas de blocage liés au code (absent, inconnu, expiré, révoqué, déjà
+  utilisé, rate limiting) : jamais de branchement sur `error.message`/
+  `error.code` d'une réponse Supabase (GoTrue enveloppe toute exception du
+  trigger dans un message générique pour un vrai visiteur, contrairement à
+  l'API Admin — bug réel rencontré et corrigé). La validité du code est
+  vérifiée en amont par `is_invitation_code_usable` (lecture seule, aucun
+  verrou), jamais après coup via le contenu de l'erreur `signUp`.
+- Tests : SQL pgTAP (`supabase/tests/database/phase8_9_invitation_codes_test.sql`,
+  46 assertions — garde owner/aal2, format/entropie, non-énumération,
+  rate limiting, consommation atomique, `is_invitation_code_usable`,
+  non-régression messagerie) et Jest (actions serveur, formulaire, écran
+  d'administration).
+- Remplace l'ancienne fermeture totale de l'inscription
+  (`registration-config.ts`, `PUBLIC_REGISTRATION_ENABLED`, supprimés) :
+  le code d'invitation est désormais LE mécanisme de contrôle d'accès à
+  l'inscription, appliqué côté base de données, jamais une condition
+  d'affichage côté client.
+
+### 8.10 — Validation finale
 - Tests Android, tests PWA, tests Safari iPhone.
 - Installation sur écran d'accueil.
 - Sessions, conversations, médias, notifications, sécurité.

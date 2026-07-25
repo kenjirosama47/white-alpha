@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { PageShell } from '@/components/PageShell';
-import { REGISTER_COPY, REGISTRATION_CLOSED_COPY } from '@/lib/copy';
-import { PUBLIC_REGISTRATION_ENABLED } from '@/lib/registration-config';
+import { REGISTER_COPY } from '@/lib/copy';
 
 import { RegisterForm } from './RegisterForm';
 
@@ -12,28 +10,21 @@ export const metadata: Metadata = {
 };
 
 /**
- * Rendu entièrement côté serveur (composant serveur, Phase 8) : quand
- * l'inscription publique est désactivée, `RegisterForm` n'est jamais inclus
- * dans le HTML envoyé au navigateur — un visiteur sans JavaScript actif (ou
- * l'ayant désactivé) ne voit jamais de formulaire fonctionnel non plus.
- * `registerAction` refuse en plus toute soumission directe (défense en
- * profondeur, voir actions.ts) : cette page n'est pas l'unique protection.
+ * L'inscription publique en libre-service n'existe plus depuis
+ * l'introduction des codes d'invitation (Phase 8.9, migration
+ * 20260723180000_invitation_codes.sql) : ce formulaire reste affiché à
+ * tous, mais `handle_new_user` refuse systématiquement toute création de
+ * compte sans code d'invitation valide, quel que soit le chemin
+ * emprunté (cette page, un appel direct à l'API Auth...). Remplace
+ * l'ancien registration-config.ts (PUBLIC_REGISTRATION_ENABLED), supprimé :
+ * le code d'invitation est désormais LE mécanisme de fermeture, appliqué
+ * côté serveur/base de données, jamais une condition d'affichage cliente.
  */
 export default function RegisterPage() {
-  if (!PUBLIC_REGISTRATION_ENABLED) {
-    return (
-      <PageShell>
-        <h1>{REGISTRATION_CLOSED_COPY.title}</h1>
-        <p>{REGISTRATION_CLOSED_COPY.message}</p>
-        <Link href="/login">Se connecter</Link>
-      </PageShell>
-    );
-  }
-
   return (
     <PageShell>
       <h1>{REGISTER_COPY.title}</h1>
-      <p>Créez votre espace privé et sécurisé.</p>
+      <p>Créez votre espace privé et sécurisé avec un code d&apos;invitation.</p>
       <RegisterForm />
     </PageShell>
   );
