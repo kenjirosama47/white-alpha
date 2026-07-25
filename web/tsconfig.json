@@ -33,7 +33,10 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -44,6 +47,11 @@
   ],
   "exclude": [
     "node_modules",
-    "scripts/**/*.mjs"
+    "scripts/**/*.mjs",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "jest.setup.ts"
   ]
 }
