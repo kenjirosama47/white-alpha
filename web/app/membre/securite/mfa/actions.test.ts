@@ -92,14 +92,14 @@ describe('enrollMfaAction — owner', () => {
     expect(result).toEqual({
       status: 'success',
       factorId: 'factor-1',
-      qrCode: `data:image/svg+xml;utf-8,${encodeURIComponent('<svg>fake</svg>')}`,
+      qrCode: `data:image/svg+xml;base64,${Buffer.from('<svg>fake</svg>', 'utf-8').toString('base64')}`,
       secret: 'SECRETVALUE',
     });
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
-  it('owner avec un facteur déjà vérifié : renvoie already_enrolled sans appeler mfa.enroll', async () => {
+  it('owner avec un facteur déjà vérifié : renvoie already_enrolled sans appeler mfa.enroll ni jamais toucher ce facteur vérifié', async () => {
     mockListFactors.mockResolvedValue({
       data: { totp: [{ id: 'f0', status: 'verified' }], all: [{ id: 'f0', factor_type: 'totp', status: 'verified' }] },
       error: null,
@@ -109,6 +109,10 @@ describe('enrollMfaAction — owner', () => {
 
     expect(result).toEqual({ status: 'already_enrolled' });
     expect(mockEnroll).not.toHaveBeenCalled();
+    // Le court-circuit sur `totp.length > 0` a lieu AVANT le nettoyage des
+    // facteurs `unverified` (qui lit `data.all`) : un facteur déjà vérifié
+    // n'est donc jamais examiné ni désenrôlé par ce chemin.
+    expect(mockUnenroll).not.toHaveBeenCalled();
   });
 
   it('owner avec un facteur unverified abandonné : le nettoie avant de créer le nouveau (double clic, tentative abandonnée)', async () => {
@@ -127,6 +131,28 @@ describe('enrollMfaAction — owner', () => {
 
     expect(mockUnenroll).toHaveBeenCalledWith({ factorId: 'stale-factor' });
     expect(mockEnroll).toHaveBeenCalled();
+  });
+
+  it('nettoyage des facteurs unverified : ne touche jamais un facteur vérifié d’un autre type (défense en profondeur)', async () => {
+    mockListFactors.mockResolvedValue({
+      data: {
+        totp: [],
+        all: [
+          { id: 'stale-totp', factor_type: 'totp', status: 'unverified' },
+          { id: 'verified-other', factor_type: 'phone', status: 'verified' },
+        ],
+      },
+      error: null,
+    });
+    mockEnroll.mockResolvedValue({
+      data: { id: 'factor-3', totp: { qr_code: '<svg/>', secret: 'S3' } },
+      error: null,
+    });
+
+    await enrollMfaAction();
+
+    expect(mockUnenroll).toHaveBeenCalledTimes(1);
+    expect(mockUnenroll).toHaveBeenCalledWith({ factorId: 'stale-totp' });
   });
 
   it('erreur Supabase lors de listFactors : message générique, jamais le détail technique', async () => {

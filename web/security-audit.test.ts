@@ -198,11 +198,23 @@ describe('web/ — audit statique de sécurité (Phase 8.5.4, pièces jointes)',
 });
 
 describe('web/ — audit statique de sécurité (Phase MFA — enrôlement TOTP owner)', () => {
-  it('aucun console.* dans app/membre/securite/mfa/ (secret TOTP, QR code et code de vérification jamais journalisés)', () => {
+  it('aucun console.* dans app/membre/securite/mfa/ ni lib/mfa-*.ts (secret TOTP, QR code et code de vérification jamais journalisés)', () => {
     const mfaDir = path.join(ROOT, 'app', 'membre', 'securite', 'mfa');
-    const offenders = collectSourceFiles(mfaDir).filter((file) => /console\.\w+\(/.test(readFileSync(file, 'utf8')));
+    const mfaLibFiles = [path.join(ROOT, 'lib', 'mfa-errors.ts'), path.join(ROOT, 'lib', 'mfa-qr.ts')];
+    const offenders = [...collectSourceFiles(mfaDir), ...mfaLibFiles].filter((file) => /console\.\w+\(/.test(readFileSync(file, 'utf8')));
 
     expect(offenders).toEqual([]);
+  });
+
+  it('lib/mfa-qr.ts n’utilise jamais le paramètre non standard `;utf-8,` dans son code exécutable (cause du QR ne s’affichant pas de façon fiable en production)', () => {
+    const content = readFileSync(path.join(ROOT, 'lib', 'mfa-qr.ts'), 'utf8');
+    // Le commentaire du fichier a le droit de CITER l'ancien format fautif
+    // (pour documenter précisément ce qu'il ne faut jamais refaire) — seul le
+    // code exécutable réel doit en être exempt.
+    const codeOnly = content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+    expect(codeOnly).not.toContain(';utf-8,');
+    expect(codeOnly).toContain(';base64,');
   });
 
   it('lib/mfa-errors.ts ne renvoie jamais tel quel le message brut de Supabase Auth (uniquement des messages traduits fixes)', () => {

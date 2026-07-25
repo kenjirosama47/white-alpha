@@ -1,6 +1,7 @@
 'use server';
 
 import { MFA_CODE_GENERIC_ERROR, translateMfaError } from '@/lib/mfa-errors';
+import { buildQrCodeDataUri } from '@/lib/mfa-qr';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -77,7 +78,7 @@ export async function enrollMfaAction(): Promise<EnrollMfaResult> {
   return {
     status: 'success',
     factorId: data.id,
-    qrCode: `data:image/svg+xml;utf-8,${encodeURIComponent(data.totp.qr_code)}`,
+    qrCode: buildQrCodeDataUri(data.totp.qr_code),
     secret: data.totp.secret,
   };
 }
