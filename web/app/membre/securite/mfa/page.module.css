@@ -6,12 +6,38 @@
 }
 
 .qrImage {
-  width: 220px;
-  height: 220px;
+  width: 260px;
+  height: 260px;
   align-self: center;
   background: #fff;
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.introText {
+  color: var(--color-text-secondary);
+}
+
+.appExplanation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.appExplanation ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.buttonRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .codeValue {

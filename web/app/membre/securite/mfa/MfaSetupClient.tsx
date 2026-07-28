@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 
 import { Button } from '@/components/Button';
@@ -32,9 +33,19 @@ const ENROLLMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 type ViewState =
   | { kind: 'idle' }
-  | { kind: 'enrolling'; factorId: string; qrCode: string; secret: string }
+  | {
+      kind: 'enrolling';
+      factorId: string;
+      qrCode: string;
+      secret: string;
+      codeFormVisible: boolean;
+      manualVisible: boolean;
+    }
   | { kind: 'success' }
   | { kind: 'enrolled' };
+
+/** Délai avant la redirection automatique, assez court pour rester fluide, assez long pour que le message de réussite soit lu. */
+const SUCCESS_REDIRECT_DELAY_MS = 1500;
 
 function initialView(status: MfaEnrollmentStatus): ViewState {
   return status === 'verified' ? { kind: 'enrolled' } : { kind: 'idle' };
@@ -50,6 +61,7 @@ function initialView(status: MfaEnrollmentStatus): ViewState {
  * visible de l'état "en cours".
  */
 export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollmentStatus }) {
+  const router = useRouter();
   const [view, setView] = useState<ViewState>(() => initialView(initialStatus));
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -78,6 +90,14 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
     return () => clearTimeout(timer);
   }, [enrollingFactorId]);
 
+  // Redirection automatique après une activation réussie : le message de
+  // réussite reste visible le temps du délai, jamais remplacé instantanément.
+  useEffect(() => {
+    if (view.kind !== 'success') return;
+    const timer = setTimeout(() => router.push('/membre/admin/invitations'), SUCCESS_REDIRECT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [view.kind, router]);
+
   function handleEnroll() {
     setEnrollError(null);
     setExpiredNotice(false);
@@ -86,7 +106,14 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
         const result = await enrollMfaAction();
         if (result.status === 'success') {
           setShowSecret(false);
-          setView({ kind: 'enrolling', factorId: result.factorId, qrCode: result.qrCode, secret: result.secret });
+          setView({
+            kind: 'enrolling',
+            factorId: result.factorId,
+            qrCode: result.qrCode,
+            secret: result.secret,
+            codeFormVisible: false,
+            manualVisible: false,
+          });
         } else if (result.status === 'already_enrolled') {
           setView({ kind: 'enrolled' });
         } else {
@@ -96,6 +123,18 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
         setEnrollError(NETWORK_ERROR_MESSAGE);
       }
     });
+  }
+
+  /** « Scanner avec mon téléphone » : révèle le champ de saisie du code, jamais le secret manuel. */
+  function handleRevealCodeForm() {
+    if (view.kind !== 'enrolling') return;
+    setView({ ...view, codeFormVisible: true });
+  }
+
+  /** « Je ne peux pas scanner » : révèle en plus le repli code manuel (toujours masqué par défaut). */
+  function handleCannotScan() {
+    if (view.kind !== 'enrolling') return;
+    setView({ ...view, codeFormVisible: true, manualVisible: true });
   }
 
   function handleVerify(formData: FormData) {
@@ -154,10 +193,10 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
   if (view.kind === 'success') {
     return (
       <div className={styles.block} role="status">
-        <p className={styles.successMessage}>Authentification à deux facteurs activée.</p>
-        <Button href="/membre/admin/invitations">Accéder aux codes d&apos;invitation</Button>
+        <h2>Sécuriser mon compte</h2>
+        <p className={styles.successMessage}>Compte sécurisé. Redirection vers les codes d&apos;invitation…</p>
         <p>
-          <Link href="/membre">Retour à l&apos;espace membre</Link>
+          <Link href="/membre/admin/invitations">Continuer maintenant</Link>
         </p>
       </div>
     );
@@ -166,11 +205,7 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
   if (view.kind === 'enrolling') {
     return (
       <div className={styles.block}>
-        <h2>Activer l&apos;authentification à deux facteurs</h2>
-        <p>
-          Scanne ce code avec ton application d&apos;authentification (Google Authenticator, 1Password…), puis
-          saisis le code à 6 chiffres généré.
-        </p>
+        <h2>Sécuriser mon compte</h2>
 
         <img
           src={view.qrCode}
@@ -183,39 +218,65 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
           un accès à ta place.
         </p>
 
-        <p>Impossible de scanner ?</p>
-        <div className={styles.secretRow}>
-          <p className={styles.codeValue}>{showSecret ? view.secret : SECRET_PLACEHOLDER}</p>
-          <Button type="button" variant="ghost" onClick={() => setShowSecret((current) => !current)}>
-            {showSecret ? 'Masquer le code manuel' : 'Afficher le code manuel'}
-          </Button>
+        <div className={styles.appExplanation}>
+          <p>
+            Utilise Google Authenticator, Microsoft Authenticator, ou un gestionnaire de mots de passe compatible
+            TOTP. Installe l&apos;application sur ton téléphone si tu ne l&apos;as pas déjà.
+          </p>
+          <ol>
+            <li>Ouvre l&apos;application d&apos;authentification sur ton téléphone.</li>
+            <li>Appuie sur + puis scanne le QR code.</li>
+            <li>Saisis ici le code à 6 chiffres affiché.</li>
+          </ol>
         </div>
 
-        <form action={handleVerify} className={formStyles.form}>
-          <div className={formStyles.field}>
-            <label className={formStyles.label} htmlFor="code">
-              Code à 6 chiffres
-            </label>
-            <input
-              id="code"
-              name="code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              required
-              className={formStyles.input}
-              disabled={isPending}
-            />
+        {!view.codeFormVisible && (
+          <div className={styles.buttonRow}>
+            <Button type="button" onClick={handleRevealCodeForm}>
+              Scanner avec mon téléphone
+            </Button>
+            <Button type="button" variant="secondary" onClick={handleCannotScan}>
+              Je ne peux pas scanner
+            </Button>
           </div>
+        )}
 
-          <FormError message={verifyError} />
+        {view.manualVisible && (
+          <div className={styles.secretRow}>
+            <p className={styles.codeValue}>{showSecret ? view.secret : SECRET_PLACEHOLDER}</p>
+            <Button type="button" variant="ghost" onClick={() => setShowSecret((current) => !current)}>
+              {showSecret ? 'Masquer le code manuel' : 'Afficher le code manuel'}
+            </Button>
+          </div>
+        )}
 
-          <Button type="submit" disabled={isPending}>
-            {isPending ? 'Vérification…' : 'Vérifier'}
-          </Button>
-        </form>
+        {view.codeFormVisible && (
+          <form action={handleVerify} className={formStyles.form}>
+            <div className={formStyles.field}>
+              <label className={formStyles.label} htmlFor="code">
+                Code à 6 chiffres
+              </label>
+              <input
+                id="code"
+                name="code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                className={formStyles.input}
+                disabled={isPending}
+              />
+            </div>
+
+            <FormError message={verifyError} />
+
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Activation…' : "Terminer l'activation"}
+            </Button>
+          </form>
+        )}
 
         <Button type="button" variant="ghost" disabled={isPending} onClick={handleCancelEnrollment}>
           Annuler
@@ -280,6 +341,8 @@ export function MfaSetupClient({ initialStatus }: { initialStatus: MfaEnrollment
 
   return (
     <div className={styles.block}>
+      <h2>Sécuriser mon compte</h2>
+      <p className={styles.introText}>Cette étape ne prend qu&apos;une minute et n&apos;est à faire qu&apos;une seule fois.</p>
       <p>Authentification à deux facteurs : non activée.</p>
       {expiredNotice && <p role="status">Le code d&apos;activation a expiré pour des raisons de sécurité. Relance l&apos;activation.</p>}
       <FormError message={enrollError} />

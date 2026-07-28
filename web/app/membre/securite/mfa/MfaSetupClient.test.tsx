@@ -3,6 +3,11 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MfaSetupClient } from './MfaSetupClient';
 import { cancelMfaEnrollmentAction, disableMfaAction, enrollMfaAction, verifyMfaEnrollmentAction } from './actions';
 
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 jest.mock('./actions', () => ({
   enrollMfaAction: jest.fn(),
   cancelMfaEnrollmentAction: jest.fn(),
@@ -34,17 +39,33 @@ async function startEnrollment() {
   });
 }
 
+/** Simule le chemin principal : « j'ai scanné », révèle uniquement le champ de code. */
+async function openCodeForm() {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Scanner avec mon téléphone' }));
+  });
+}
+
+/** Simule le repli : « Je ne peux pas scanner », révèle le code manuel (toujours masqué par défaut) et le champ de code. */
+async function openManualFallback() {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Je ne peux pas scanner' }));
+  });
+}
+
 beforeEach(() => {
   mockEnroll.mockReset();
   mockCancel.mockReset();
   mockVerify.mockReset();
   mockDisable.mockReset();
+  mockPush.mockReset();
 });
 
-describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
+describe('MfaSetupClient (parcours TOTP simplifié — enrôlement owner)', () => {
   it("owner sans MFA voit l'écran d'enrôlement (bouton d'activation, pas de statut « activée »)", () => {
     render(<MfaSetupClient initialStatus="none" />);
 
+    expect(screen.getByText('Sécuriser mon compte')).toBeTruthy();
     expect(screen.getByText('Authentification à deux facteurs : non activée.')).toBeTruthy();
     expect(screen.getByRole('button', { name: "Activer l'authentification à deux facteurs" })).toBeTruthy();
   });
@@ -57,7 +78,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     expect(screen.queryByAltText(/Code QR/)).toBeNull();
   });
 
-  it('clic sur Activer : démarre l’enrôlement, affiche le QR (data URI base64) et un avertissement, jamais une chaîne SVG brute', async () => {
+  it('clic sur Activer : le QR code est visible immédiatement, avant tout choix (jamais une chaîne SVG brute)', async () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     render(<MfaSetupClient initialStatus="none" />);
 
@@ -68,13 +89,40 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     expect(qrImage.src).toMatch(/^data:image\/svg\+xml;base64,/);
     expect(qrImage.src).not.toContain('<svg');
     expect(screen.getByRole('note')).toHaveTextContent(/ne partage jamais/i);
+    expect(screen.getByRole('button', { name: 'Scanner avec mon téléphone' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Je ne peux pas scanner' })).toBeTruthy();
   });
 
-  it('code manuel masqué par défaut : le secret réel n’apparaît pas dans le DOM tant que non révélé', async () => {
+  it("cite uniquement Google Authenticator, Microsoft Authenticator et un gestionnaire compatible TOTP, avec le mode d'emploi en trois étapes", async () => {
+    mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
+    render(<MfaSetupClient initialStatus="none" />);
+    await startEnrollment();
+
+    expect(screen.getByText(/Google Authenticator/)).toBeTruthy();
+    expect(screen.getByText(/Microsoft Authenticator/)).toBeTruthy();
+    expect(screen.getByText(/gestionnaire de mots de passe compatible/i)).toBeTruthy();
+    expect(screen.getByText("Ouvre l'application d'authentification sur ton téléphone.")).toBeTruthy();
+    expect(screen.getByText('Appuie sur + puis scanne le QR code.')).toBeTruthy();
+    expect(screen.getByText('Saisis ici le code à 6 chiffres affiché.')).toBeTruthy();
+  });
+
+  it('code manuel masqué par défaut : ni le secret ni même le repli ne sont dans le DOM tant que « Je ne peux pas scanner » n’a pas été choisi', async () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     render(<MfaSetupClient initialStatus="none" />);
 
     await startEnrollment();
+
+    expect(screen.queryByText('SECRETVALUE')).toBeNull();
+    expect(screen.queryByText(/^•+$/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Afficher le code manuel' })).toBeNull();
+  });
+
+  it('« Je ne peux pas scanner » révèle le repli code manuel, masqué par défaut derrière son propre bouton', async () => {
+    mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
+    render(<MfaSetupClient initialStatus="none" />);
+    await startEnrollment();
+
+    await openManualFallback();
 
     expect(screen.queryByText('SECRETVALUE')).toBeNull();
     expect(screen.getByText(/^•+$/)).toBeTruthy();
@@ -85,6 +133,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     render(<MfaSetupClient initialStatus="none" />);
     await startEnrollment();
+    await openManualFallback();
 
     fireEvent.click(screen.getByRole('button', { name: 'Afficher le code manuel' }));
     expect(screen.getByText('SECRETVALUE')).toBeTruthy();
@@ -92,6 +141,19 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Masquer le code manuel' }));
     expect(screen.queryByText('SECRETVALUE')).toBeNull();
     expect(screen.getByText(/^•+$/)).toBeTruthy();
+  });
+
+  it('« Scanner avec mon téléphone » révèle le champ de code sans jamais afficher le secret manuel', async () => {
+    mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
+    render(<MfaSetupClient initialStatus="none" />);
+    await startEnrollment();
+
+    await openCodeForm();
+
+    expect(screen.getByLabelText('Code à 6 chiffres')).toBeTruthy();
+    expect(screen.getByRole('button', { name: "Terminer l'activation" })).toBeTruthy();
+    expect(screen.queryByText('SECRETVALUE')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Afficher le code manuel' })).toBeNull();
   });
 
   it('erreur réseau au démarrage de l’enrôlement : message générique visible, bouton réactivé (jamais un échec silencieux)', async () => {
@@ -113,43 +175,73 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     expect(screen.getByText('Authentification à deux facteurs : activée.')).toBeTruthy();
   });
 
-  it('code invalide pendant la vérification : message générique, reste sur l’écran de QR', async () => {
+  it('mauvais code refusé pendant la vérification : message générique, reste sur l’écran de QR, aal2 non franchi', async () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     mockVerify.mockResolvedValue({ status: 'error', error: 'Code incorrect. Réessaie.' });
     render(<MfaSetupClient initialStatus="none" />);
     await startEnrollment();
+    await openCodeForm();
 
     fillCode('000000');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
+      fireEvent.click(screen.getByRole('button', { name: "Terminer l'activation" }));
     });
 
     expect(mockVerify).toHaveBeenCalledWith('factor-1', '000000');
     expect(screen.getByRole('alert')).toHaveTextContent('Code incorrect. Réessaie.');
     expect(screen.getByAltText(/Code QR/)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('code valide : affiche « activée » et l’accès aux codes d’invitation, secret absent de cet écran', async () => {
+  it('code valide : franchit aal2 côté serveur (verifyMfaEnrollmentAction), affiche un message de réussite clair', async () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     mockVerify.mockResolvedValue({ status: 'success' });
     render(<MfaSetupClient initialStatus="none" />);
     await startEnrollment();
+    await openCodeForm();
 
     fillCode('123456');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
+      fireEvent.click(screen.getByRole('button', { name: "Terminer l'activation" }));
     });
 
-    expect(screen.getByText('Authentification à deux facteurs activée.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: "Accéder aux codes d'invitation" })).toBeTruthy();
+    expect(mockVerify).toHaveBeenCalledWith('factor-1', '123456');
+    expect(screen.getByText(/Compte sécurisé/)).toBeTruthy();
     expect(screen.queryByText('SECRETVALUE')).toBeNull();
   });
 
-  it('Annuler pendant l’enrôlement : désenrôle le facteur unverified et efface le secret de l’état (retour à l’écran initial)', async () => {
+  it('après activation réussie, redirige automatiquement vers /membre/admin/invitations', async () => {
+    jest.useFakeTimers();
+    try {
+      mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
+      mockVerify.mockResolvedValue({ status: 'success' });
+      render(<MfaSetupClient initialStatus="none" />);
+      await startEnrollment();
+      await openCodeForm();
+      fillCode('123456');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: "Terminer l'activation" }));
+      });
+
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async () => {
+        jest.advanceTimersByTime(1500);
+      });
+
+      expect(mockPush).toHaveBeenCalledWith('/membre/admin/invitations');
+      expect(mockPush).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('Annuler pendant l’enrôlement : désenrôle le facteur unverified (considéré compromis) et efface le secret de l’état', async () => {
     mockEnroll.mockResolvedValue(ENROLL_SUCCESS);
     mockCancel.mockResolvedValue({ ok: true });
     render(<MfaSetupClient initialStatus="none" />);
     await startEnrollment();
+    await openManualFallback();
     fireEvent.click(screen.getByRole('button', { name: 'Afficher le code manuel' }));
     expect(screen.getByText('SECRETVALUE')).toBeTruthy();
 
@@ -184,7 +276,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     });
   });
 
-  it('nouvel enrôlement après annulation : génère et affiche un secret différent, jamais l’ancien réutilisé', async () => {
+  it('nouveau facteur différent après redémarrage : un nouvel enrôlement après annulation génère et affiche un secret différent, jamais l’ancien réutilisé', async () => {
     mockEnroll.mockResolvedValueOnce(ENROLL_SUCCESS);
     mockCancel.mockResolvedValue({ ok: true });
     render(<MfaSetupClient initialStatus="none" />);
@@ -196,6 +288,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     const SECOND_ENROLL = { ...ENROLL_SUCCESS, factorId: 'factor-2', secret: 'DIFFERENTSECRET' };
     mockEnroll.mockResolvedValueOnce(SECOND_ENROLL);
     await startEnrollment();
+    await openManualFallback();
     fireEvent.click(screen.getByRole('button', { name: 'Afficher le code manuel' }));
 
     expect(screen.getByText('DIFFERENTSECRET')).toBeTruthy();
@@ -225,7 +318,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
     }
   });
 
-  it('aucune fuite du secret ni du QR dans console.* à aucune étape (activation, révélation, vérification, annulation)', async () => {
+  it('aucune fuite du secret, du QR ni du code saisi dans console.* à aucune étape (activation, révélation, vérification, annulation)', async () => {
     const consoleSpies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((method) =>
       jest.spyOn(console, method).mockImplementation(() => {}),
     );
@@ -236,10 +329,11 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
       render(<MfaSetupClient initialStatus="none" />);
 
       await startEnrollment();
+      await openManualFallback();
       fireEvent.click(screen.getByRole('button', { name: 'Afficher le code manuel' }));
       fillCode('000000');
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Vérifier' }));
+        fireEvent.click(screen.getByRole('button', { name: "Terminer l'activation" }));
       });
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
@@ -250,6 +344,7 @@ describe('MfaSetupClient (Phase MFA — enrôlement TOTP owner)', () => {
           const serialized = call.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ');
           expect(serialized).not.toContain('SECRETVALUE');
           expect(serialized).not.toContain('<svg');
+          expect(serialized).not.toContain('000000');
         }
       }
     } finally {
